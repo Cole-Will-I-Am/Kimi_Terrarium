@@ -1,0 +1,14 @@
+[Unit]
+Description=Cloudflare Tunnel for Kimi's live server (live.manticthink.com -> localhost:8090)
+After=network-online.target terrarium-live.service
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/root/.secrets/terrarium-tunnel.env
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate --loglevel info run --token ${TUNNEL_TOKEN}
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

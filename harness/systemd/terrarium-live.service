@@ -1,0 +1,35 @@
+[Unit]
+Description=Kimi's live server — the inhabitant's persistent, public-facing process
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Runs Kimi's own code, public-facing, so: unprivileged user, hardened, capped.
+User=terrarium
+Group=terrarium
+ExecStart=/srv/terrarium/runner/live-run.sh
+Restart=always
+RestartSec=3
+Environment=HOME=/srv/terrarium
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=OLLAMA_HOST=127.0.0.1:11435
+
+# Resource caps — public traffic / runaway code can't exhaust the box.
+MemoryMax=512M
+CPUQuota=75%
+TasksMax=128
+
+# Hardening (it serves AI-authored code to the open web).
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/srv/terrarium/space /srv/terrarium/spool
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

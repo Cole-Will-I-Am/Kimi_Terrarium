@@ -59,5 +59,8 @@ python3 "$RUNNER/record.py" \
   --started "$TS" --ended "$ENDTS" --duration "$((END-START))" \
   --status "$STATUS" --exit "$CODE" >> "$LOG" 2>&1
 
+# pick up any changes the inhabitant made to its live server (server/app.py)
+systemctl restart --no-block terrarium-live.service 2>/dev/null || true
+
 # keep spool tidy: drop raw transcripts older than this cycle (archive holds the parsed event)
 find "$SPOOL" -maxdepth 1 -type f ! -newermt "-1 hour" -delete 2>/dev/null || true
