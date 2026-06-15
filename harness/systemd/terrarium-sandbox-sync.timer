@@ -1,0 +1,11 @@
+[Unit]
+Description=Check every 30 min whether the inhabitant's sandbox advanced
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=30min
+AccuracySec=1min
+Persistent=false
+
+[Install]
+WantedBy=timers.target

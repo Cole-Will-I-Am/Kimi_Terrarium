@@ -1,0 +1,8 @@
+[Unit]
+Description=Advance Kimi_Terrarium's sandbox submodule to the inhabitant's latest pushes
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/root/Kimi_Terrarium/scripts/sync-sandbox.sh
