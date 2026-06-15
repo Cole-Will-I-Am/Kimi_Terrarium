@@ -26,6 +26,15 @@ CREATE TABLE IF NOT EXISTS cycles (
 );
 CREATE INDEX IF NOT EXISTS idx_cycles_started ON cycles(started_at);
 
+-- "Chronicle": breakthroughs/milestones in Kimi's evolution, written hourly by the chronicler model.
+CREATE TABLE IF NOT EXISTS milestones (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts      TEXT,
+  title   TEXT,
+  summary TEXT,
+  tag     TEXT
+);
+
 -- "Chats w/ Cole": transcript of the owner's Telegram conversations with Kimi.
 CREATE TABLE IF NOT EXISTS chats (
   id   INTEGER PRIMARY KEY AUTOINCREMENT,

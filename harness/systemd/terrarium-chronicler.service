@@ -1,0 +1,9 @@
+[Unit]
+Description=Terrarium Chronicler — hourly review of Kimi's evolution (MiniMax-M3)
+After=network-online.target ollama.service
+Wants=network-online.target ollama.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /root/Kimi_Terrarium/chronicler/chronicle.py
+TimeoutStartSec=420

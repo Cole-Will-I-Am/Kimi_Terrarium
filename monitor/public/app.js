@@ -305,6 +305,29 @@ function viewAbout(){
     </div>`;
 }
 
+const TAGCOLOR={creation:"#3ddb8f",capability:"#6179ff",insight:"#8c61f2",surprise:"#ffce6a",milestone:"#cfd3e6"};
+async function viewChronicle(){
+  await refreshLive();
+  const data=await getJSON("/api/milestones?limit=100");
+  const ms=(data&&data.milestones)||[];
+  const body = ms.length ? ms.map(m=>{
+    const c=TAGCOLOR[m.tag]||"#cfd3e6";
+    return `<div class="mstone">
+      <div class="ms-rail"><span class="ms-dot" style="background:${c}"></span></div>
+      <div class="ms-body">
+        <div class="ms-top"><span class="ms-tag" style="color:${c};border-color:${c}55">${esc(m.tag||"milestone")}</span>
+          <span class="meta">${ago(m.ts)}</span></div>
+        <h3 class="ms-title">${esc(m.title)}</h3>
+        <div class="md ms-sum">${mdToHtml(m.summary||"")}</div>
+      </div></div>`;
+  }).join("") : `<div class="empty">The chronicler hasn't recorded anything yet. It reviews the terrarium every hour and notes what's genuinely new.</div>`;
+  view.innerHTML=`<div class="panel">
+    <h2><span class="em">📜</span> The Chronicle</h2>
+    <p class="sectlead">Key developments and breakthroughs in the terrarium's evolution — observed and written each hour by an AI chronicler (a MiniMax-M3 model) watching Kimi grow.</p>
+    <div class="mslist">${body}</div>
+  </div>`;
+}
+
 let thoughtsOldest=null;
 function thinkingNow(){
   if(!live.lastEnded) return false;
@@ -455,6 +478,7 @@ async function route(){
   window.scrollTo(0,0);
   setActiveNav(head==="cycle"?"log":head);
   if(head===""){ await viewOverview(); pollTimer=setInterval(()=>viewOverview(),15000); }
+  else if(head==="chronicle"){ await viewChronicle(); pollTimer=setInterval(()=>viewChronicle(),60000); }
   else if(head==="canvas"){ await viewCanvas(); }
   else if(head==="chats"){ await viewChats(); pollTimer=setInterval(appendNewChats,4000); }
   else if(head==="thoughts"){ await viewThoughts(true); pollTimer=setInterval(()=>viewThoughts(true),15000); }

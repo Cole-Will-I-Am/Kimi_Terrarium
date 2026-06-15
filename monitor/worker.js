@@ -20,6 +20,8 @@ export default {
     if (pathname === "/api/thoughts" && request.method === "GET") return thoughts(request, env);
     if (pathname === "/api/chat/ingest" && request.method === "POST") return chatIngest(request, env);
     if (pathname === "/api/chat" && request.method === "GET") return chatList(request, env);
+    if (pathname === "/api/milestones/ingest" && request.method === "POST") return milestoneIngest(request, env);
+    if (pathname === "/api/milestones" && request.method === "GET") return milestoneList(request, env);
     if (pathname === "/api/canvas" && request.method === "GET") return canvasMeta(env);
     if ((pathname === "/kimi/raw" || pathname.startsWith("/kimi/raw/")) && request.method === "GET")
       return serveCanvas(env, pathname.slice(9));            // raw page (in the sandbox)
@@ -101,6 +103,32 @@ async function chatIngest(request, env) {
     `INSERT INTO chats (ts, role, text) VALUES (?,?,?)`
   ).bind(m.ts || new Date().toISOString(), role, text).run();
   return json({ ok: true, id: r.meta?.last_row_id ?? null });
+}
+
+async function milestoneIngest(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!env.INGEST_TOKEN || token !== env.INGEST_TOKEN) return json({ error: "unauthorized" }, 401);
+  let m;
+  try { m = await request.json(); } catch { return json({ error: "bad json" }, 400); }
+  const title = (m.title ?? "").toString().slice(0, 200).trim();
+  const summary = (m.summary ?? "").toString().slice(0, 2000).trim();
+  const tag = (m.tag ?? "milestone").toString().slice(0, 24);
+  if (!title) return json({ error: "no title" }, 400);
+  const dup = await env.DB.prepare(`SELECT 1 FROM milestones WHERE lower(title)=lower(?)`).bind(title).first();
+  if (dup) return json({ ok: true, skipped: "duplicate" });
+  const r = await env.DB.prepare(
+    `INSERT INTO milestones (ts, title, summary, tag) VALUES (?,?,?,?)`
+  ).bind(m.ts || new Date().toISOString(), title, summary, tag).run();
+  return json({ ok: true, id: r.meta?.last_row_id ?? null });
+}
+
+async function milestoneList(request, env) {
+  const limit = Math.min(parseInt(new URL(request.url).searchParams.get("limit") || "100", 10), 200);
+  const { results } = await env.DB.prepare(
+    `SELECT id, ts, title, summary, tag FROM milestones ORDER BY id DESC LIMIT ?`
+  ).bind(limit).all();
+  return json({ milestones: results });
 }
 
 async function chatList(request, env) {
