@@ -26,6 +26,14 @@ CREATE TABLE IF NOT EXISTS cycles (
 );
 CREATE INDEX IF NOT EXISTS idx_cycles_started ON cycles(started_at);
 
+-- "Chats w/ Cole": transcript of the owner's Telegram conversations with Kimi.
+CREATE TABLE IF NOT EXISTS chats (
+  id   INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts   TEXT,
+  role TEXT,   -- 'cole' or 'kimi'
+  text TEXT
+);
+
 -- "Kimi's Page": the inhabitant's self-authored public webpage. Single row.
 CREATE TABLE IF NOT EXISTS site (
   id         INTEGER PRIMARY KEY CHECK (id = 1),

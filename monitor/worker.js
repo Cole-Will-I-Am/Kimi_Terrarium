@@ -17,6 +17,8 @@ export default {
     if (pathname === "/api/events" && request.method === "GET") return listEvents(request, env);
     if (pathname === "/api/stats" && request.method === "GET") return stats(env);
     if (pathname === "/api/journal" && request.method === "GET") return journalView(env);
+    if (pathname === "/api/chat/ingest" && request.method === "POST") return chatIngest(request, env);
+    if (pathname === "/api/chat" && request.method === "GET") return chatList(request, env);
     if (pathname === "/api/canvas" && request.method === "GET") return canvasMeta(env);
     if (pathname === "/kimi/raw" && request.method === "GET") return serveCanvas(env);
     if (pathname === "/kimi" && request.method === "GET") return kimiPage();
@@ -74,6 +76,38 @@ async function ingest(request, env) {
   }
 
   return json({ ok: true, cycle: e.cycle });
+}
+
+async function chatIngest(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!env.INGEST_TOKEN || token !== env.INGEST_TOKEN) return json({ error: "unauthorized" }, 401);
+  let m;
+  try { m = await request.json(); } catch { return json({ error: "bad json" }, 400); }
+  const role = m.role === "kimi" ? "kimi" : "cole";
+  const text = (m.text ?? "").toString().slice(0, 8000);
+  if (!text) return json({ error: "empty" }, 400);
+  const r = await env.DB.prepare(
+    `INSERT INTO chats (ts, role, text) VALUES (?,?,?)`
+  ).bind(m.ts || new Date().toISOString(), role, text).run();
+  return json({ ok: true, id: r.meta?.last_row_id ?? null });
+}
+
+async function chatList(request, env) {
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "60", 10), 200);
+  const after = url.searchParams.get("after");
+  let rows;
+  if (after != null) {
+    rows = (await env.DB.prepare(
+      `SELECT id, ts, role, text FROM chats WHERE id > ? ORDER BY id ASC LIMIT ?`
+    ).bind(parseInt(after, 10), limit).all()).results;
+  } else {
+    rows = (await env.DB.prepare(
+      `SELECT id, ts, role, text FROM chats ORDER BY id DESC LIMIT ?`
+    ).bind(limit).all()).results.reverse();
+  }
+  return json({ messages: rows });
 }
 
 async function canvasMeta(env) {

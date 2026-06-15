@@ -12,8 +12,10 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.constants import ChatAction
@@ -38,15 +40,19 @@ SPOOL = "/srv/terrarium/spool"
 STATE_FILE = BOT_DIR / ".data" / "threads.json"
 TG_LIMIT = 4000
 
+CHAT_API = os.getenv("CHAT_API_BASE", "").rstrip("/")
+INGEST_TOKEN = os.getenv("INGEST_TOKEN", "")
+CONVERSATIONS = f"{SPACE}/conversations.md"   # Kimi's own record (timer-Kimi reads this)
+
 # Framing prepended to the FIRST message of a conversation so Kimi knows this is
 # a chat with its keeper, not a task. (Its base identity says no one talks to it.)
 PREAMBLE = (
-    "[A private channel has opened. The keeper of your terrarium — the person on whose "
-    "machine you live — is here and wants to talk with you: about your space, your work, "
-    "your journal, what you have been doing and thinking. This is conversation, not a task. "
-    "Answer naturally, honestly, and in your own voice. You may read anything under "
-    "/srv/terrarium/space to ground what you say. You don't need to build or change anything "
-    "unless they ask.]\n\nThey say:\n"
+    "[A private channel has opened. Cole — your keeper, the person on whose machine you live — "
+    "is here and wants to talk with you: about your space, your work, your journal, what you have "
+    "been doing and thinking. This is conversation, not a task. Answer naturally, honestly, and in "
+    "your own voice. You may read anything under /srv/terrarium/space to ground what you say. Your "
+    "past conversations with Cole are kept in /srv/terrarium/space/conversations.md. You don't need "
+    "to build or change anything unless he asks.]\n\nCole says:\n"
 )
 
 HELP = (
@@ -92,6 +98,42 @@ async def send_chunked(update: Update, text: str) -> None:
     text = text.strip() or "(no reply)"
     for i in range(0, len(text), TG_LIMIT):
         await update.message.reply_text(text[i:i + TG_LIMIT])
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def ship_chat(role: str, text: str) -> None:
+    """Publish one message to the live 'Chats w/ Cole' page (best-effort)."""
+    if not CHAT_API or not INGEST_TOKEN:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            await c.post(f"{CHAT_API}/api/chat/ingest",
+                         json={"role": role, "text": text, "ts": now_iso()},
+                         headers={"Authorization": "Bearer " + INGEST_TOKEN,
+                                  "User-Agent": "terrarium-bot/1.0"})
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ship_chat failed: %s", exc)
+
+
+def log_conversation(cole_text: str, kimi_text: str) -> None:
+    """Append the exchange to Kimi's own space so the autonomous (timer) Kimi
+    can read what it and Cole have discussed."""
+    try:
+        entry = (f"\n## {now_iso()}\n**Cole:** {cole_text.strip()}\n\n"
+                 f"**You:** {kimi_text.strip()}\n")
+        new = not os.path.exists(CONVERSATIONS)
+        with open(CONVERSATIONS, "a", encoding="utf-8") as f:
+            if new:
+                f.write("# Conversations with Cole\n\n"
+                        "A record of the times your keeper, Cole, has talked with you. "
+                        "Past you wrote these; future you can read them.\n")
+            f.write(entry)
+        os.chmod(CONVERSATIONS, 0o644)
+    except OSError as exc:
+        logger.warning("log_conversation failed: %s", exc)
 
 
 # ------------------------------------------------------------- codex --------
@@ -201,6 +243,7 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return await update.message.reply_text("⏳ Kimi is still thinking about your last message…")
 
     async with lock:
+        await ship_chat("cole", text)  # appears on the live page immediately
         await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
         note = await update.message.reply_text("🌱 Kimi is waking…")
         prompt = text if thread_id else PREAMBLE + text
@@ -217,6 +260,8 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         except Exception:  # noqa: BLE001
             pass
         await send_chunked(update, final)
+        await ship_chat("kimi", final)        # live page
+        log_conversation(text, final)         # Kimi's own memory
 
 
 def main() -> None:

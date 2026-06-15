@@ -177,6 +177,20 @@ a:hover{color:var(--accent2)}
 .repocard h3{margin:0 0 4px;font-size:16px}
 .repocard p{margin:0;color:var(--tx2);font-size:13.5px}
 
+/* chats w/ Cole */
+.chatbox{height:min(66vh,640px); overflow-y:auto; display:flex; flex-direction:column; gap:12px;
+  padding:6px 4px 4px; scroll-behavior:smooth}
+.msg{display:flex; flex-direction:column; max-width:80%}
+.msg.cole{align-self:flex-end; align-items:flex-end}
+.msg.kimi{align-self:flex-start; align-items:flex-start}
+.msg .who{font-size:11px; color:var(--tx3); margin:0 6px 3px; letter-spacing:.04em}
+.msg .bubble{padding:11px 15px; border-radius:16px; font-size:14.5px; line-height:1.55;
+  white-space:pre-wrap; word-break:break-word; border:1px solid var(--border)}
+.msg.cole .bubble{background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff;
+  border:none; border-bottom-right-radius:5px}
+.msg.kimi .bubble{background:var(--surface2); color:var(--tx); border-bottom-left-radius:5px}
+.msg .t{font-family:var(--mono); font-size:10.5px; color:var(--tx3); margin:4px 7px 0}
+
 /* vitality gauge */
 .vitality .vhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .vitality .vnum{font-family:var(--mono);font-size:24px;font-weight:680}

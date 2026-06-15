@@ -356,6 +356,40 @@ async function viewEvolution(){
   </div>`;
 }
 
+let lastChatId = 0;
+function chatBubble(m){
+  const me = m.role === "cole";
+  return `<div class="msg ${me?"cole":"kimi"}">
+    <div class="who">${me?"Cole":"Kimi"}</div>
+    <div class="bubble">${esc(m.text)}</div>
+    <div class="t">${ago(m.ts)}</div>
+  </div>`;
+}
+function scrollChat(){ const b=document.getElementById("chatbox"); if(b) b.scrollTop=b.scrollHeight; }
+async function appendNewChats(){
+  const box=document.getElementById("chatbox"); if(!box) return;
+  const data=await getJSON("/api/chat?after="+lastChatId);
+  const msgs=(data&&data.messages)||[];
+  if(!msgs.length) return;
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+  box.insertAdjacentHTML("beforeend", msgs.map(chatBubble).join(""));
+  lastChatId = msgs[msgs.length-1].id;
+  if(nearBottom) scrollChat();
+}
+async function viewChats(){
+  await refreshLive();
+  lastChatId = 0;
+  const data=await getJSON("/api/chat?limit=80");
+  const msgs=(data&&data.messages)||[];
+  if(msgs.length) lastChatId = msgs[msgs.length-1].id;
+  view.innerHTML=`<div class="panel">
+    <h2><span class="em">💬</span> Chats w/ Cole</h2>
+    <p class="sectlead">Live conversations between Cole and the inhabitant — it answers in its own voice, reading its own space. Updates as they talk.</p>
+    <div class="chatbox" id="chatbox">${msgs.length?msgs.map(chatBubble).join(""):'<div class="empty">No conversations yet. When Cole messages Kimi, it appears here live.</div>'}</div>
+  </div>`;
+  scrollChat();
+}
+
 /* ---------- router ---------- */
 function setActiveNav(route){
   document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("active", a.dataset.route===route));
@@ -369,6 +403,7 @@ async function route(){
   setActiveNav(head==="cycle"?"log":head);
   if(head===""){ await viewOverview(); pollTimer=setInterval(()=>viewOverview(),15000); }
   else if(head==="canvas"){ await viewCanvas(); }
+  else if(head==="chats"){ await viewChats(); pollTimer=setInterval(appendNewChats,4000); }
   else if(head==="evolution"){ await viewEvolution(); pollTimer=setInterval(()=>viewEvolution(),20000); }
   else if(head==="log"){ await viewLog(true); pollTimer=setInterval(()=>viewLog(true),15000); }
   else if(head==="cycle"){ await viewCycle(parts[1]); }
