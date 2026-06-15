@@ -47,8 +47,8 @@ async function ingest(request, env) {
        cycle, thread_id, started_at, ended_at, duration_s, status, exit_code,
        summary, reasoning, commands_json, num_commands, files_json, num_files_changed,
        input_tokens, output_tokens, reasoning_tokens, chars_out, journal_excerpt,
-       space_files_json, space_bytes, received_at
-     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+       space_files_json, space_bytes, vitality, vitality_delta, cycle_effort, received_at
+     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
   )
     .bind(
       e.cycle, e.thread_id ?? null, e.started_at ?? null, e.ended_at ?? null,
@@ -59,6 +59,7 @@ async function ingest(request, env) {
       e.input_tokens ?? null, e.output_tokens ?? null, e.reasoning_tokens ?? null,
       e.chars_out ?? null, e.journal_excerpt ?? null,
       JSON.stringify(e.space_files ?? []), e.space_bytes ?? null,
+      e.vitality ?? null, e.vitality_delta ?? null, e.cycle_effort ?? null,
       new Date().toISOString()
     )
     .run();
@@ -141,7 +142,7 @@ async function listEvents(request, env) {
   let q = `SELECT cycle, started_at, ended_at, duration_s, status, exit_code,
                   summary, commands_json, num_commands, files_json, num_files_changed,
                   output_tokens, reasoning_tokens, chars_out, space_bytes,
-                  space_files_json
+                  space_files_json, vitality, vitality_delta, cycle_effort
            FROM cycles`;
   const binds = [];
   if (before) { q += ` WHERE cycle < ?`; binds.push(parseInt(before, 10)); }
@@ -200,7 +201,8 @@ async function stats(env) {
   ).all();
 
   const latest = await env.DB.prepare(
-    `SELECT cycle, started_at, status, space_bytes, space_files_json, journal_excerpt
+    `SELECT cycle, started_at, status, space_bytes, space_files_json, journal_excerpt,
+            vitality, vitality_delta
      FROM cycles ORDER BY cycle DESC LIMIT 1`
   ).first();
 
@@ -208,6 +210,12 @@ async function stats(env) {
   if (latest && latest.space_files_json) {
     try { space_file_count = JSON.parse(latest.space_files_json).length; } catch {}
   }
+
+  // recent vitality trend (oldest→newest) for a sparkline
+  const series = await env.DB.prepare(
+    `SELECT vitality FROM cycles ORDER BY cycle DESC LIMIT 40`
+  ).all();
+  const vitality_series = (series.results || []).map(r => r.vitality).reverse();
 
   return json({
     ...agg,
@@ -217,5 +225,8 @@ async function stats(env) {
     space_bytes: latest ? latest.space_bytes : null,
     space_file_count,
     journal_excerpt: latest ? latest.journal_excerpt : null,
+    vitality: latest ? latest.vitality : null,
+    vitality_delta: latest ? latest.vitality_delta : null,
+    vitality_series,
   });
 }

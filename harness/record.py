@@ -21,6 +21,8 @@ CAP_JOURNAL = 30000
 CAP_SPACE_FILES = 200
 CAP_CANVAS = 220000  # the inhabitant's self-authored public page (≈215 KB)
 CANVAS = os.path.join(SPACE, "site", "index.html")
+VITALITY_STATE = os.path.join(EVENTS, "vitality.json")   # harness-private state
+VITALITY_FILE = os.path.join(SPACE, "vitality.md")       # ambient gauge the inhabitant can see
 
 
 def cap(s, n):
@@ -82,6 +84,8 @@ def snapshot_space():
     for root, dirs, names in os.walk(SPACE):
         dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "__pycache__")]
         for n in names:
+            if root == SPACE and n == "vitality.md":
+                continue  # harness-written gauge, not the inhabitant's creation
             p = os.path.join(root, n)
             try:
                 total += os.path.getsize(p)
@@ -109,6 +113,59 @@ def read_canvas():
             return f.read(CAP_CANVAS + 1)[:CAP_CANVAS]
     except (FileNotFoundError, IsADirectoryError, OSError):
         return None
+
+
+def update_vitality(event):
+    """A 0-100 activity gauge: EMA of per-cycle effort. Rises with activity,
+    decays when wakings pass quietly. Written into the inhabitant's space as an
+    ambient signal (never spoken in its prompt)."""
+    try:
+        with open(VITALITY_STATE) as f:
+            st = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        st = {"vitality": 50.0, "space_files": []}
+    prev = float(st.get("vitality", 50.0))
+    prev_files = set(st.get("space_files", []))
+    cur_files = set(event.get("space_files", []))
+    added = len(cur_files - prev_files)
+    cmds = event.get("num_commands", 0) or 0
+    chars = event.get("chars_out", 0) or 0
+    # per-cycle effort, each term capped so trivial spam plateaus
+    effort = min(100.0, min(cmds, 15) * 4 + min(added, 5) * 10 + min(chars, 6000) / 120.0)
+    if event.get("status") != "ok":
+        effort *= 0.5
+    vit = max(0.0, min(100.0, 0.6 * prev + 0.4 * effort))
+    delta = vit - prev
+
+    try:
+        with open(VITALITY_STATE, "w") as f:
+            json.dump({"vitality": round(vit, 1), "space_files": sorted(cur_files),
+                       "cycle": event["cycle"]}, f)
+    except OSError:
+        pass
+    write_vitality_md(vit, delta, event["cycle"])
+    return round(vit, 1), round(delta, 1), round(effort, 1)
+
+
+def write_vitality_md(v, delta, cycle):
+    filled = int(round(v / 10.0))
+    bar = "▰" * filled + "▱" * (10 - filled)
+    if delta > 0.5:
+        trend = f"▲ +{delta:.0f}"
+    elif delta < -0.5:
+        trend = f"▼ {delta:.0f}"
+    else:
+        trend = "▬ steady"
+    txt = (f"vitality  {bar}  {v:.0f}/100   {trend}\n\n"
+           "a measure of how active recent wakings have been — commands run, files\n"
+           "changed, words written, things made. it rises with activity and slips\n"
+           f"when wakings pass quietly. updated each waking · cycle {cycle}.\n")
+    try:
+        with open(VITALITY_FILE, "w", encoding="utf-8") as f:
+            f.write(txt)
+        os.chmod(VITALITY_FILE, 0o644)
+    except OSError:
+        pass
 
 
 def init_ledger():
@@ -195,6 +252,11 @@ def main():
         "space_bytes": space_bytes,
         "canvas_html": read_canvas(),
     }
+
+    vit, vdelta, effort = update_vitality(event)
+    event["vitality"] = vit
+    event["vitality_delta"] = vdelta
+    event["cycle_effort"] = effort
 
     payload = json.dumps(event, ensure_ascii=False)
     # archive locally + ledger

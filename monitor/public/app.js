@@ -12,6 +12,37 @@ const firstLine = (s) => { const t=(s||"").trim().split("\n").find(l=>l.trim());
 async function getJSON(u){ try{ const r=await fetch(u); if(!r.ok) return null; return await r.json(); }catch{ return null; } }
 const card=(k,v,sub)=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}${sub?` <small>${sub}</small>`:""}</div></div>`;
 
+const vitColor=(v)=> v>=66?"#3ddb8f": v>=33?"#ffce6a":"#ff6b6b";
+function sparkHtml(series){
+  const s=(series||[]).filter(x=>x!=null);
+  if(s.length<2) return "";
+  const w=180,h=34,max=100,min=0;
+  const pts=s.map((v,i)=>{
+    const x=(i/(s.length-1))*w;
+    const y=h-((v-min)/(max-min))*h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  const last=s[s.length-1];
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${pts}" fill="none" stroke="${vitColor(last)}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+  </svg>`;
+}
+function gaugeHtml(v,delta,series){
+  if(v==null) return "";
+  const c=vitColor(v);
+  const tr = delta==null?"" : delta>0.5?`<span class="vtrend" style="color:#3ddb8f">▲ +${Math.round(delta)}</span>`
+    : delta<-0.5?`<span class="vtrend" style="color:#ff6b6b">▼ ${Math.round(delta)}</span>`
+    : `<span class="vtrend" style="color:var(--tx3)">▬ steady</span>`;
+  return `<div class="panel vitality">
+    <div class="vhead">
+      <h2 style="margin:0"><span class="em">❤️</span> Vitality</h2>
+      <div class="vnum" style="color:${c}">${Math.round(v)}<small>/100</small> ${tr}</div>
+    </div>
+    <div class="vbar"><div class="vfill" style="width:${v}%;background:linear-gradient(90deg,${c}88,${c})"></div></div>
+    <div class="vfoot"><span>how active &amp; productive recent wakings have been</span>${sparkHtml(series)}</div>
+  </div>`;
+}
+
 /* ---------- tiny markdown (journal is simple md) ---------- */
 function mdToHtml(src){
   const lines=(src||"").replace(/\r/g,"").split("\n");
@@ -97,6 +128,7 @@ async function viewOverview(){
         <a class="btn" href="${GH}" target="_blank" rel="noopener">Its code on GitHub ↗</a>
       </div>
     </section>
+    ${gaugeHtml(s?.vitality, s?.vitality_delta, s?.vitality_series)}
     <div class="grid">
       ${card("Wakings", s?.total_cycles ?? 0)}
       ${card("Time awake", awakeMin, "min")}
@@ -280,6 +312,50 @@ async function viewCanvas(){
     </div>`;
 }
 
+async function viewEvolution(){
+  await refreshLive();
+  const data=await getJSON("/api/events?limit=40");
+  const evs=(data&&data.events)||[];
+  let body;
+  if(evs.length<1){ body=`<div class="empty">No wakings yet.</div>`; }
+  else {
+    body = evs.map((e,i)=>{
+      const older = evs[i+1];
+      const cur = new Set(e.space_files||[]);
+      const prev = new Set((older&&older.space_files)||[]);
+      const added = older ? [...cur].filter(f=>!prev.has(f)) : [...cur];
+      const removed = older ? [...prev].filter(f=>!cur.has(f)) : [];
+      const v=e.vitality, d=e.vitality_delta;
+      const vchip = v!=null ? `<span class="chip" style="color:${vitColor(v)}">❤ ${Math.round(v)}${d>0.5?` ▲${Math.round(d)}`:d<-0.5?` ▼${Math.round(d)}`:""}</span>` : "";
+      const diffs = [
+        added.length?`<div class="diff add">${added.map(f=>`<span>+ ${esc(f)}</span>`).join("")}</div>`:"",
+        removed.length?`<div class="diff del">${removed.map(f=>`<span>− ${esc(f)}</span>`).join("")}</div>`:"",
+      ].join("");
+      const quiet = !added.length && !removed.length;
+      return `<a class="evo" href="#/cycle/${e.cycle}">
+        <div class="evo-rail"><span class="evo-dot ${e.status==="ok"?"":esc(e.status)}"></span></div>
+        <div class="evo-body">
+          <div class="evo-top"><span class="badge">#${e.cycle}</span>
+            <span class="ttl">${esc(firstLine(e.summary))}</span>
+            <span class="meta">${ago(e.started_at)}</span></div>
+          <div class="chips">
+            ${vchip}
+            <span class="chip" style="color:#3ddb8f">+${added.length}</span>
+            <span class="chip" style="color:#ff6b6b">−${removed.length}</span>
+            <span class="chip">⌨ ${e.num_commands||0}</span>
+            <span class="chip">${e.chars_out??0} ch</span>
+          </div>
+          ${diffs || (quiet?`<div class="diff quiet">no files changed — a quiet waking</div>`:"")}
+        </div></a>`;
+    }).join("");
+  }
+  view.innerHTML=`<div class="panel">
+    <h2><span class="em">🧬</span> Evolution</h2>
+    <p class="sectlead">What changed between wakings — files it added <span style="color:#3ddb8f">+</span> or removed <span style="color:#ff6b6b">−</span>, how busy it was, and how its vitality moved. Its world, growing one waking at a time.</p>
+    <div class="evolist">${body}</div>
+  </div>`;
+}
+
 /* ---------- router ---------- */
 function setActiveNav(route){
   document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("active", a.dataset.route===route));
@@ -293,6 +369,7 @@ async function route(){
   setActiveNav(head==="cycle"?"log":head);
   if(head===""){ await viewOverview(); pollTimer=setInterval(()=>viewOverview(),15000); }
   else if(head==="canvas"){ await viewCanvas(); }
+  else if(head==="evolution"){ await viewEvolution(); pollTimer=setInterval(()=>viewEvolution(),20000); }
   else if(head==="log"){ await viewLog(true); pollTimer=setInterval(()=>viewLog(true),15000); }
   else if(head==="cycle"){ await viewCycle(parts[1]); }
   else if(head==="journal"){ await viewJournal(); pollTimer=setInterval(()=>viewJournal(),20000); }

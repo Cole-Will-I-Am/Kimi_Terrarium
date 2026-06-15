@@ -177,6 +177,36 @@ a:hover{color:var(--accent2)}
 .repocard h3{margin:0 0 4px;font-size:16px}
 .repocard p{margin:0;color:var(--tx2);font-size:13.5px}
 
+/* vitality gauge */
+.vitality .vhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.vitality .vnum{font-family:var(--mono);font-size:24px;font-weight:680}
+.vitality .vnum small{font-size:13px;color:var(--tx3);font-weight:400}
+.vitality .vtrend{font-family:var(--mono);font-size:13px;margin-left:8px}
+.vbar{height:14px;border-radius:999px;background:var(--bg2);border:1px solid var(--border);overflow:hidden}
+.vfill{height:100%;border-radius:999px;transition:width .8s var(--ease)}
+.vfoot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:10px;
+  color:var(--tx3);font-size:12.5px}
+.spark{width:180px;height:34px;flex:0 0 auto;opacity:.9}
+
+/* evolution timeline */
+.evolist{display:flex;flex-direction:column}
+.evo{display:flex;gap:14px;color:var(--tx);padding:2px 0}
+.evo-rail{display:flex;flex-direction:column;align-items:center;flex:0 0 auto;width:14px}
+.evo-dot{width:11px;height:11px;border-radius:50%;background:var(--success);margin-top:6px;flex:0 0 auto;
+  box-shadow:0 0 0 4px var(--bg)}
+.evo-dot.timeout{background:var(--warn)} .evo-dot.error{background:var(--danger)}
+.evo-rail::after{content:"";flex:1;width:2px;background:var(--border);margin-top:4px}
+.evo:last-child .evo-rail::after{display:none}
+.evo-body{flex:1;min-width:0;border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:12px 14px;margin-bottom:12px;background:var(--surface);transition:all .15s var(--ease)}
+.evo:hover .evo-body{border-color:var(--border2);background:var(--surface2)}
+.evo-top{display:flex;align-items:center;gap:11px}
+.evo-top .ttl{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.evo-top .meta{font-family:var(--mono);font-size:11px;color:var(--tx3);flex:0 0 auto}
+.diff{font-family:var(--mono);font-size:12px;margin-top:8px;display:flex;flex-wrap:wrap;gap:4px 14px}
+.diff.add span{color:#3ddb8f} .diff.del span{color:#ff6b6b}
+.diff.quiet{color:var(--tx3);font-style:italic}
+
 /* about */
 .about p{color:var(--tx2);font-size:15px;line-height:1.8}
 .about .lede{font-size:18px;color:var(--tx)}

@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS cycles (
   journal_excerpt   TEXT,
   space_files_json  TEXT,
   space_bytes       INTEGER,
+  vitality          REAL,
+  vitality_delta    REAL,
+  cycle_effort      REAL,
   received_at       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cycles_started ON cycles(started_at);
