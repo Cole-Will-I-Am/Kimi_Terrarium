@@ -19,6 +19,8 @@ CAP_CMD = 400
 CAP_LIST = 60
 CAP_JOURNAL = 30000
 CAP_SPACE_FILES = 200
+CAP_CANVAS = 220000  # the inhabitant's self-authored public page (≈215 KB)
+CANVAS = os.path.join(SPACE, "site", "index.html")
 
 
 def cap(s, n):
@@ -98,6 +100,15 @@ def read_journal_tail():
     except FileNotFoundError:
         return ""
     return data[-CAP_JOURNAL:]
+
+
+def read_canvas():
+    """The inhabitant's self-authored public page, if it has made one."""
+    try:
+        with open(CANVAS, encoding="utf-8", errors="replace") as f:
+            return f.read(CAP_CANVAS + 1)[:CAP_CANVAS]
+    except (FileNotFoundError, IsADirectoryError, OSError):
+        return None
 
 
 def init_ledger():
@@ -182,6 +193,7 @@ def main():
         "journal_excerpt": read_journal_tail(),
         "space_files": space_files,
         "space_bytes": space_bytes,
+        "canvas_html": read_canvas(),
     }
 
     payload = json.dumps(event, ensure_ascii=False)

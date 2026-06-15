@@ -71,6 +71,18 @@ a:hover{color:var(--accent2)}
   background-clip:text; -webkit-text-fill-color:transparent}
 .hero p{color:var(--tx2); font-size:16px; max-width:620px; margin:0 auto}
 .hero .creed{margin-top:18px; font-style:italic; color:var(--tx3); font-size:14px}
+.wakestatus{display:inline-flex; align-items:center; gap:10px; margin:2px auto 18px;
+  padding:9px 18px; border-radius:999px; background:var(--soft);
+  border:1px solid rgba(97,121,255,.30); color:var(--tx);
+  font-family:var(--mono); font-size:13.5px; min-height:20px}
+.wakestatus::before{content:""; width:9px; height:9px; border-radius:50%; background:var(--success);
+  box-shadow:0 0 0 0 rgba(61,219,143,.6); animation:pulse 2.4s infinite}
+.wakestatus:empty{display:none}
+
+/* Kimi's self-authored page, embedded in a sandboxed frame */
+.canvasframe{border:1px solid var(--border2); border-radius:var(--radius-sm); overflow:hidden;
+  background:#0a0a0e; box-shadow:var(--shadow)}
+.canvasframe iframe{width:100%; height:min(72vh,720px); border:0; display:block}
 
 /* stat grid */
 .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:13px; margin:24px 0}

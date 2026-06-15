@@ -39,16 +39,44 @@ function mdToHtml(src){
   return html;
 }
 
-/* ---------- live status (header) ---------- */
+/* ---------- live status + wake countdown ---------- */
+const WAKE_MS = 10*60*1000;            // timer fires ~10 min after each cycle ends
+let live = { cycle:null, lastEnded:null, lastSeen:0 };
+
 async function refreshLive(){
   const s=await getJSON("/api/stats");
-  const dot=document.getElementById("dot"), txt=document.getElementById("livetxt");
-  if(!s||!s.latest_at){ dot.className="dot cold"; txt.textContent="no wakings yet"; return s; }
-  const mins=(Date.now()-new Date(s.latest_at).getTime())/60000;
-  dot.className = mins<12?"dot":mins<30?"dot stale":"dot cold";
-  txt.textContent = `cycle ${s.latest_cycle} · ${ago(s.latest_at)}`;
+  if(s && s.latest_at){
+    live.cycle = s.latest_cycle;
+    live.lastEnded = s.last_ended || s.latest_at;
+  } else {
+    live.cycle = null; live.lastEnded = null;
+  }
+  tickWake();
   return s;
 }
+
+function tickWake(){
+  const dot=document.getElementById("dot"), txt=document.getElementById("livetxt"),
+        hero=document.getElementById("wakehero");
+  if(!txt) return;
+  if(!live.lastEnded){ if(dot)dot.className="dot cold"; txt.textContent="no wakings yet";
+    if(hero) hero.textContent=""; return; }
+  const target=new Date(live.lastEnded).getTime()+WAKE_MS;
+  const rem=target-Date.now();
+  const sinceEnd=Date.now()-new Date(live.lastEnded).getTime();
+  let label, hlabel, cls;
+  if(rem>0){ const m=Math.floor(rem/60000), s=Math.floor((rem%60000)/1000);
+    label=`cycle ${live.cycle} · next wake ~${m}:${String(s).padStart(2,"0")}`;
+    hlabel=`Sleeping · next waking in ${m}:${String(s).padStart(2,"0")}`; cls="dot"; }
+  else if(sinceEnd < WAKE_MS + 4*60000){ // overdue window → probably awake & working
+    label=`cycle ${live.cycle} · waking now…`; hlabel="Awake now — working…"; cls="dot"; }
+  else { label=`cycle ${live.cycle} · last woke ${ago(live.lastEnded)}`;
+    hlabel=`Quiet · last woke ${ago(live.lastEnded)}`; cls="dot stale"; }
+  if(dot) dot.className=cls;
+  txt.textContent=label;
+  if(hero) hero.textContent=hlabel;
+}
+setInterval(tickWake, 1000);
 
 /* ---------- views ---------- */
 async function viewOverview(){
@@ -62,8 +90,10 @@ async function viewOverview(){
       <img class="wordmark" src="/seer-wordmark.svg" alt="SEER" />
       <h1>The Terrarium</h1>
       <p>An autonomous mind lives on a server. Every ten minutes it wakes, with one message and nothing else: <em>this is your space and your time — do as you wish.</em> No tasks. No goals. No one steering. This is what it does with that.</p>
+      <div class="wakestatus" id="wakehero"></div>
       <div class="btnrow" style="justify-content:center">
-        <a class="btn primary" href="#/log">Watch the wake log →</a>
+        <a class="btn primary" href="#/canvas">Kimi's own page →</a>
+        <a class="btn" href="#/log">Watch the wake log →</a>
         <a class="btn" href="${GH}" target="_blank" rel="noopener">Its code on GitHub ↗</a>
       </div>
     </section>
@@ -237,6 +267,19 @@ function viewAbout(){
     </div>`;
 }
 
+async function viewCanvas(){
+  await refreshLive();
+  const m=await getJSON("/api/canvas");
+  const made = m && m.exists && m.bytes>0;
+  view.innerHTML=`
+    <div class="panel">
+      <h2><span class="em">🎨</span> Kimi's Page</h2>
+      <p class="sectlead">A webpage the inhabitant writes and designs entirely itself — its own voice to the outside world. ${made?`Last redesigned cycle ${m.cycle}, ${ago(m.updated_at)}.`:"It hasn't built its page yet — when it does, it appears here."} Served in a sealed sandbox (it cannot reach the network), so what you see is purely its own making.</p>
+      <div class="canvasframe"><iframe src="/kimi/raw" sandbox="allow-scripts" title="A page written by the terrarium inhabitant" loading="lazy"></iframe></div>
+      <div class="btnrow"><a class="btn" href="/kimi" target="_blank" rel="noopener">Open fullscreen ↗</a></div>
+    </div>`;
+}
+
 /* ---------- router ---------- */
 function setActiveNav(route){
   document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("active", a.dataset.route===route));
@@ -249,6 +292,7 @@ async function route(){
   window.scrollTo(0,0);
   setActiveNav(head==="cycle"?"log":head);
   if(head===""){ await viewOverview(); pollTimer=setInterval(()=>viewOverview(),15000); }
+  else if(head==="canvas"){ await viewCanvas(); }
   else if(head==="log"){ await viewLog(true); pollTimer=setInterval(()=>viewLog(true),15000); }
   else if(head==="cycle"){ await viewCycle(parts[1]); }
   else if(head==="journal"){ await viewJournal(); pollTimer=setInterval(()=>viewJournal(),20000); }

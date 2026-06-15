@@ -22,3 +22,11 @@ CREATE TABLE IF NOT EXISTS cycles (
   received_at       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_cycles_started ON cycles(started_at);
+
+-- "Kimi's Page": the inhabitant's self-authored public webpage. Single row.
+CREATE TABLE IF NOT EXISTS site (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  html       TEXT,
+  cycle      INTEGER,
+  updated_at TEXT
+);
