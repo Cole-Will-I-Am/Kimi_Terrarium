@@ -12,7 +12,7 @@ Restart=on-failure
 RestartSec=5
 # Codex/runuser need a sane PATH; bot reads its own .env for the token.
 Environment=HOME=/root
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target

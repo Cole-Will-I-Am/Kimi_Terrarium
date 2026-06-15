@@ -40,6 +40,9 @@ SPOOL = "/srv/terrarium/spool"
 STATE_FILE = BOT_DIR / ".data" / "threads.json"
 TG_LIMIT = 4000
 
+# runuser lives in sbin; resolve an absolute path so a lean systemd PATH can't hide it
+RUNUSER = next((p for p in ("/usr/sbin/runuser", "/sbin/runuser", "/usr/bin/runuser",
+                            "/bin/runuser") if os.path.exists(p)), "runuser")
 CHAT_API = os.getenv("CHAT_API_BASE", "").rstrip("/")
 INGEST_TOKEN = os.getenv("INGEST_TOKEN", "")
 CONVERSATIONS = f"{SPACE}/conversations.md"   # Kimi's own record (timer-Kimi reads this)
@@ -141,7 +144,7 @@ async def run_codex(prompt: str, chat_id: int, thread_id: str | None) -> tuple[s
     out_path = f"{SPOOL}/chat-{chat_id}.txt"
     env = ["env", "HOME=/srv/terrarium", f"CODEX_HOME={CODEX_HOME}",
            "OLLAMA_HOST=127.0.0.1:11435"]
-    args = ["runuser", "-u", "terrarium", "--", *env, "codex", "exec"]
+    args = [RUNUSER, "-u", "terrarium", "--", *env, "codex", "exec"]
     if thread_id:
         args += ["resume", thread_id, "--json", "--skip-git-repo-check", "-o", out_path, prompt]
     else:
