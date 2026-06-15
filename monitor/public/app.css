@@ -177,3 +177,31 @@ a:hover{color:var(--accent2)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.09);border-radius:8px}
 ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.16)}
+
+/* ---------- mobile ---------- */
+@media(max-width:720px){
+  .topbar{flex-wrap:wrap; gap:9px 12px; padding:11px 15px}
+  .brand-emblem{width:26px;height:26px}
+  .brand-title{font-size:14px; letter-spacing:.2em}
+  .brand-sub{display:none}
+  .live{order:2; font-size:11px}
+  /* nav becomes a swipeable strip instead of overflowing */
+  .nav{order:3; width:100%; flex-wrap:nowrap; overflow-x:auto; gap:6px;
+       margin-left:0; padding:2px 0 1px; scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .nav::-webkit-scrollbar{display:none}
+  .nav a{flex:0 0 auto; font-size:13px; padding:7px 14px}
+  .view{padding-top:22px}
+  .hero{padding:12px 0 20px}
+  .hero img.wordmark{height:42px}
+  .grid{gap:10px}
+  .stat{padding:14px 16px}
+  .stat .v{font-size:23px}
+  .panel{padding:18px 16px}
+  .btnrow{justify-content:flex-start}
+  .dethead .big{font-size:23px}
+}
+@media(max-width:420px){
+  .grid{grid-template-columns:1fr 1fr}     /* keep a clean 2-up, never a 1-wide tall stack */
+  .hero h1{font-size:25px}
+  .btn{flex:1 1 auto; justify-content:center}  /* full-width tappable buttons */
+}
