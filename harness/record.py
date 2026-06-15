@@ -5,7 +5,7 @@ ledger, and ship it (plus any previously-unshipped cycles) to the monitor.
 Runs as root (invoked by wake.sh). The inhabitant never sees this or the ledger.
 Output is capped everywhere so a chatty cycle can't bloat storage or the wire.
 """
-import argparse, json, os, sqlite3, urllib.request, urllib.error, sys
+import argparse, json, os, pwd, sqlite3, urllib.request, urllib.error, sys
 
 EVENTS = "/srv/terrarium/events"
 SPACE = "/srv/terrarium/space"
@@ -164,7 +164,9 @@ def write_vitality_md(v, delta, cycle):
         with open(VITALITY_FILE, "w", encoding="utf-8") as f:
             f.write(txt)
         os.chmod(VITALITY_FILE, 0o644)
-    except OSError:
+        ti = pwd.getpwnam("terrarium")
+        os.chown(VITALITY_FILE, ti.pw_uid, ti.pw_gid)  # native to the inhabitant's space
+    except (OSError, KeyError):
         pass
 
 

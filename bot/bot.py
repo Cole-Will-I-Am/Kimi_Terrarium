@@ -12,6 +12,7 @@ import asyncio
 import json
 import logging
 import os
+import pwd
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -135,7 +136,9 @@ def log_conversation(cole_text: str, kimi_text: str) -> None:
                         "Past you wrote these; future you can read them.\n")
             f.write(entry)
         os.chmod(CONVERSATIONS, 0o644)
-    except OSError as exc:
+        ti = pwd.getpwnam("terrarium")
+        os.chown(CONVERSATIONS, ti.pw_uid, ti.pw_gid)  # native to the inhabitant's space
+    except (OSError, KeyError) as exc:
         logger.warning("log_conversation failed: %s", exc)
 
 
@@ -151,7 +154,7 @@ async def run_codex(prompt: str, chat_id: int, thread_id: str | None) -> tuple[s
         args += ["--json", "--skip-git-repo-check", "-C", SPACE, "-o", out_path, prompt]
 
     proc = await asyncio.create_subprocess_exec(
-        *args, stdin=asyncio.subprocess.DEVNULL,
+        *args, cwd=SPACE, stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
     )
     try:
