@@ -2,7 +2,7 @@
 Description=Review the terrarium's evolution once an hour
 
 [Timer]
-OnBootSec=12min
+OnActiveSec=12min
 OnUnitInactiveSec=1h
 AccuracySec=2min
 Persistent=false
