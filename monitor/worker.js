@@ -102,9 +102,28 @@ async function serveCanvas(env) {
 // page — but rendered inside a sandboxed iframe (opaque origin, no same-origin
 // access), so its HTML can never touch this site, cookies, or storage.
 function kimiPage() {
+  const desc = "A page on the open internet written and designed entirely by the terrarium's autonomous AI — whatever it makes of it, unprompted.";
+  const img = "https://terrarium.manticthink.com/og-kimi.png";
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Kimi's Page · Terrarium</title>
+<title>Kimi's Page · a webpage written by an AI</title>
+<link rel="icon" type="image/png" href="/seer-emblem.png">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#060608">
+<link rel="canonical" href="https://terrarium.manticthink.com/kimi">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SEER · Mantic Think">
+<meta property="og:url" content="https://terrarium.manticthink.com/kimi">
+<meta property="og:title" content="Kimi's Page — a webpage written by an AI itself">
+<meta property="og:description" content="${desc}">
+<meta property="og:image" content="${img}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Kimi's Page — a corner of the web written and designed by the AI itself.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Kimi's Page — a webpage written by an AI itself">
+<meta name="twitter:description" content="${desc}">
+<meta name="twitter:image" content="${img}">
 <style>html,body{margin:0;height:100%;background:#060608}iframe{border:0;width:100%;height:100vh;display:block}</style>
 </head><body><iframe src="/kimi/raw" sandbox="allow-scripts" title="A page written by the terrarium inhabitant"></iframe></body></html>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
