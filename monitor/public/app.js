@@ -8,7 +8,7 @@ const esc = (s) => (s ?? "").toString().replace(/[&<>"]/g, c => ({ "&":"&amp;","
 const fmtBytes = (b) => { if (b == null) return "—"; const u=["B","KB","MB","GB"]; let i=0,n=b; while(n>=1024&&i<u.length-1){n/=1024;i++} return n.toFixed(n<10&&i>0?1:0)+u[i]; };
 const fmtDur = (s) => { if (s==null) return "—"; if (s<60) return s+"s"; const m=Math.floor(s/60); return m+"m"+(s%60?(" "+(s%60)+"s"):""); };
 const ago = (iso) => { if(!iso) return "—"; const d=(Date.now()-new Date(iso).getTime())/1000; if(d<0) return "just now"; if(d<60) return Math.floor(d)+"s ago"; if(d<3600) return Math.floor(d/60)+"m ago"; if(d<86400) return Math.floor(d/3600)+"h ago"; return Math.floor(d/86400)+"d ago"; };
-const firstLine = (s) => { const t=(s||"").trim().split("\n").find(l=>l.trim()); return t || "(woke, wrote nothing)"; };
+const firstLine = (s) => { const t=(s||"").trim().split("\n").find(l=>l.trim()); return t ? stripMd(t) : "(woke, wrote nothing)"; };
 async function getJSON(u){ try{ const r=await fetch(u); if(!r.ok) return null; return await r.json(); }catch{ return null; } }
 const card=(k,v,sub)=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}${sub?` <small>${sub}</small>`:""}</div></div>`;
 
@@ -43,32 +43,38 @@ function gaugeHtml(v,delta,series){
   </div>`;
 }
 
-/* ---------- tiny markdown (journal is simple md) ---------- */
+/* ---------- markdown renderer (safe: escapes first, then adds tags) ---------- */
 function mdToHtml(src){
   const lines=(src||"").replace(/\r/g,"").split("\n");
-  let html="", inList=false;
+  let html="", inUl=false, inOl=false, inQ=false;
   const inline=(t)=>esc(t)
     .replace(/`([^`]+)`/g,"<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*]+)\*/g,"$1<em>$2</em>");
-  const closeList=()=>{ if(inList){ html+="</ul>"; inList=false; } };
-  for(let raw of lines){
+  const ul=()=>{ if(inUl){html+="</ul>";inUl=false;} };
+  const ol=()=>{ if(inOl){html+="</ol>";inOl=false;} };
+  const q=()=>{ if(inQ){html+="</blockquote>";inQ=false;} };
+  const close=()=>{ ul(); ol(); q(); };
+  for(const raw of lines){
     const line=raw.replace(/\s+$/,"");
-    if(/^#{3}\s/.test(line)){ closeList(); html+=`<h3>${inline(line.slice(4))}</h3>`; }
-    else if(/^##\s/.test(line)){ closeList();
+    if(/^#{3}\s/.test(line)){ close(); html+=`<h3>${inline(line.slice(4))}</h3>`; }
+    else if(/^##\s/.test(line)){ close();
       const t=line.slice(3);
       const m=t.match(/^([0-9T:\-Z\s\.]+?)\s*—\s*(.*)$/);
       html+= m ? `<h2>${inline(m[2])} <span class="ts">${esc(m[1].trim())}</span></h2>` : `<h2>${inline(t)}</h2>`;
     }
-    else if(/^#\s/.test(line)){ closeList(); html+=`<h1>${inline(line.slice(2))}</h1>`; }
-    else if(/^(-{3,}|\*{3,})\s*$/.test(line)){ closeList(); html+="<hr>"; }
-    else if(/^\s*[-*]\s+/.test(line)){ if(!inList){ html+="<ul>"; inList=true; } html+=`<li>${inline(line.replace(/^\s*[-*]\s+/,""))}</li>`; }
-    else if(line.trim()===""){ closeList(); }
-    else { closeList(); html+=`<p>${inline(line)}</p>`; }
+    else if(/^#\s/.test(line)){ close(); html+=`<h1>${inline(line.slice(2))}</h1>`; }
+    else if(/^(-{3,}|\*{3,}|_{3,})\s*$/.test(line)){ close(); html+="<hr>"; }
+    else if(/^\s*>\s?/.test(line)){ ul(); ol(); if(!inQ){html+="<blockquote>";inQ=true;} html+=`<p>${inline(line.replace(/^\s*>\s?/,""))}</p>`; }
+    else if(/^\s*\d+\.\s+/.test(line)){ ul(); q(); if(!inOl){html+="<ol>";inOl=true;} html+=`<li>${inline(line.replace(/^\s*\d+\.\s+/,""))}</li>`; }
+    else if(/^\s*[-*]\s+/.test(line)){ ol(); q(); if(!inUl){html+="<ul>";inUl=true;} html+=`<li>${inline(line.replace(/^\s*[-*]\s+/,""))}</li>`; }
+    else if(line.trim()===""){ close(); }
+    else { close(); html+=`<p>${inline(line)}</p>`; }
   }
-  closeList();
+  close();
   return html;
 }
+const stripMd=(s)=>(s||"").replace(/[*`_#>]/g,"").replace(/\s+/g," ").trim();
 
 /* ---------- live status + wake countdown ---------- */
 const WAKE_MS = 10*60*1000;            // timer fires ~10 min after each cycle ends
@@ -140,7 +146,7 @@ async function viewOverview(){
     <div class="cols2">
       <div class="panel">
         <h2><span class="em">🌿</span> Latest waking</h2>
-        ${latest?`<div class="focus">${esc(latest.summary||"(it woke but wrote nothing)")}</div>
+        ${latest?`<div class="md">${latest.summary?mdToHtml(latest.summary):"(it woke but wrote nothing)"}</div>
           <div class="btnrow"><a class="btn" href="#/cycle/${latest.cycle}">Open cycle ${latest.cycle} →</a></div>`
           :`<div class="empty">Waiting for the first waking…</div>`}
       </div>
@@ -227,8 +233,8 @@ async function viewCycle(n){
         <span class="tab" data-t="cmds">⌨ Commands (${e.num_commands||0})</span>
         <span class="tab" data-t="files">📁 Files</span>
       </div>
-      <div class="tabpane active" data-p="output"><div class="prose">${e.summary?esc(e.summary):'<span class="empty">It said nothing this waking.</span>'}</div></div>
-      <div class="tabpane" data-p="think">${e.reasoning?`<div class="prose think">${esc(e.reasoning)}</div>`:'<span class="empty">No reasoning was captured for this waking.</span>'}</div>
+      <div class="tabpane active" data-p="output"><div class="md">${e.summary?mdToHtml(e.summary):'<span class="empty">It said nothing this waking.</span>'}</div></div>
+      <div class="tabpane" data-p="think">${e.reasoning?`<div class="md think">${mdToHtml(e.reasoning)}</div>`:'<span class="empty">No reasoning was captured for this waking.</span>'}</div>
       <div class="tabpane" data-p="cmds">${cmds||'<span class="empty">It ran no commands.</span>'}</div>
       <div class="tabpane" data-p="files">
         ${files?`<h2 style="margin-top:4px">Changed this waking</h2><div class="filelist">${files}</div>`:""}
@@ -363,9 +369,10 @@ async function viewEvolution(){
 let lastChatId = 0;
 function chatBubble(m){
   const me = m.role === "cole";
+  const body = me ? esc(m.text) : mdToHtml(m.text);   // Kimi's replies render markdown
   return `<div class="msg ${me?"cole":"kimi"}">
     <div class="who">${me?"Cole":"Kimi"}</div>
-    <div class="bubble">${esc(m.text)}</div>
+    <div class="bubble${me?"":" md"}">${body}</div>
     <div class="t">${ago(m.ts)}</div>
   </div>`;
 }
