@@ -1,0 +1,16 @@
+{
+  "name": "terrarium-monitor",
+  "version": "1.0.0",
+  "description": "Live observatory for the terrarium inhabitant — a SEER-styled Cloudflare Worker monitor.",
+  "main": "worker.js",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "author": "Colton Williams",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "wrangler": "^4.98.0"
+  }
+}

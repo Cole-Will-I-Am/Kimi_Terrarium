@@ -1,0 +1,14 @@
+# secrets — never commit
+*.env
+!*.env.example
+*.pat
+*.key
+id_ed25519*
+.secrets/
+
+# build / deps / local state
+node_modules/
+.wrangler/
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,22 @@
+[Unit]
+Description=Terrarium Ollama — the inhabitant's private model playground (isolated store, port 11435)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Runs as the ollama user so it SHARES cloud auth (~/.ollama/id_ed25519) — cloud
+# models work — but the key is never exposed to the unprivileged `terrarium` user,
+# which only ever talks to this daemon over HTTP on 11435.
+User=ollama
+Group=ollama
+Environment="OLLAMA_HOST=127.0.0.1:11435"
+Environment="OLLAMA_MODELS=/srv/terrarium/ollama/models"
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=3
+# Disk-ish guardrails for the inhabitant's playground.
+MemoryMax=8G
+
+[Install]
+WantedBy=multi-user.target

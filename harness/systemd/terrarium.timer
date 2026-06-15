@@ -1,0 +1,14 @@
+[Unit]
+Description=Wake the terrarium inhabitant roughly every 10 minutes
+
+[Timer]
+# Kick off shortly after boot or after (re)enabling the timer...
+OnBootSec=2min
+OnActiveSec=1min
+# ...then wake again 10 minutes after each cycle finishes (oneshot goes inactive).
+OnUnitInactiveSec=10min
+AccuracySec=15s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

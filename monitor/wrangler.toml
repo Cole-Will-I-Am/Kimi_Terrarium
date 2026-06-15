@@ -1,0 +1,20 @@
+name = "terrarium-monitor"
+main = "worker.js"
+compatibility_date = "2026-06-01"
+workers_dev = true
+
+# SEER-styled live monitor served from ./public; the Worker handles /api/*.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# One row per wake cycle, pushed from the VPS harness.
+[[d1_databases]]
+binding = "DB"
+database_name = "terrarium"
+database_id = "b997149d-b0d1-407f-b421-53ef00233e1c"
+
+# terrarium.manticthink.com — Cloudflare manages DNS + TLS for the custom domain.
+[[routes]]
+pattern = "terrarium.manticthink.com"
+custom_domain = true

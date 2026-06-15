@@ -1,0 +1,16 @@
+[Unit]
+Description=Terrarium — one wake cycle for the autonomous inhabitant
+After=network-online.target ollama.service
+Wants=network-online.target ollama.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/terrarium/runner/wake.sh
+# Runs as root so it can drop to the unprivileged `terrarium` user via runuser.
+User=root
+# Resource guardrails — these cap the whole cgroup, including the inhabitant's
+# codex/node processes. Lots of rope, but it can't exhaust the box.
+MemoryMax=4G
+CPUQuota=150%
+TasksMax=256
+TimeoutStartSec=600
