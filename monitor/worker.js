@@ -20,8 +20,10 @@ export default {
     if (pathname === "/api/chat/ingest" && request.method === "POST") return chatIngest(request, env);
     if (pathname === "/api/chat" && request.method === "GET") return chatList(request, env);
     if (pathname === "/api/canvas" && request.method === "GET") return canvasMeta(env);
-    if (pathname === "/kimi/raw" && request.method === "GET") return serveCanvas(env);
-    if (pathname === "/kimi" && request.method === "GET") return kimiPage();
+    if ((pathname === "/kimi/raw" || pathname.startsWith("/kimi/raw/")) && request.method === "GET")
+      return serveCanvas(env, pathname.slice(9));            // raw page (in the sandbox)
+    if ((pathname === "/kimi" || pathname.startsWith("/kimi/")) && request.method === "GET")
+      return kimiPage(pathname === "/kimi" ? "" : pathname.slice(6));  // wrapper
     if (pathname === "/feed.xml" && request.method === "GET") return rss(request, env);
     if (pathname.startsWith("/api/events/") && request.method === "GET")
       return oneEvent(env, pathname.split("/").pop());
@@ -68,11 +70,18 @@ async function ingest(request, env) {
 
   // "Kimi's Page" — the inhabitant's self-authored public webpage. Stored as a
   // single row; updated whenever a cycle ships fresh HTML for it.
-  if (typeof e.canvas_html === "string" && e.canvas_html.length) {
-    await env.DB.prepare(
-      `INSERT INTO site (id, html, cycle, updated_at) VALUES (1,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET html=excluded.html, cycle=excluded.cycle, updated_at=excluded.updated_at`
-    ).bind(e.canvas_html, e.cycle, new Date().toISOString()).run();
+  // "Kimi's Page" — full set of self-authored pages (index.html is home).
+  // Full-replace each ingest so deletions propagate.
+  if (e.pages && typeof e.pages === "object" && !Array.isArray(e.pages)) {
+    const now = new Date().toISOString();
+    const entries = Object.entries(e.pages)
+      .filter(([p, h]) => typeof p === "string" && typeof h === "string" && !p.includes(".."))
+      .slice(0, 40);
+    const stmts = [env.DB.prepare(`DELETE FROM pages`)];
+    for (const [p, h] of entries)
+      stmts.push(env.DB.prepare(`INSERT INTO pages (path, html, updated_at) VALUES (?,?,?)`)
+        .bind(p, h.slice(0, 220000), now));
+    await env.DB.batch(stmts);
   }
 
   return json({ ok: true, cycle: e.cycle });
@@ -111,32 +120,49 @@ async function chatList(request, env) {
 }
 
 async function canvasMeta(env) {
-  const row = await env.DB.prepare(`SELECT cycle, updated_at, length(html) AS bytes FROM site WHERE id=1`).first();
-  return json({ exists: !!row, cycle: row?.cycle ?? null, updated_at: row?.updated_at ?? null, bytes: row?.bytes ?? 0 });
+  const { results } = await env.DB.prepare(
+    `SELECT path, length(html) AS bytes, updated_at FROM pages ORDER BY path`
+  ).all();
+  const pages = results || [];
+  const updated = pages.reduce((m, p) => (p.updated_at && p.updated_at > m ? p.updated_at : m), "") || null;
+  return json({
+    exists: pages.length > 0,
+    count: pages.length,
+    pages: pages.map(p => p.path),
+    bytes: pages.reduce((s, p) => s + (p.bytes || 0), 0),
+    updated_at: updated,
+  });
 }
 
-// Serve the inhabitant's HTML, locked down hard: a strict CSP that allows inline
-// style/script and data: images but blocks ALL network — so its page can be
-// creative and interactive yet cannot phone home, load trackers, or exfiltrate.
-async function serveCanvas(env) {
-  const row = await env.DB.prepare(`SELECT html FROM site WHERE id=1`).first();
-  const html = row?.html || "<!doctype html><meta charset=utf-8><body style=\"font:15px system-ui;color:#888;background:#0a0a0e;display:grid;place-items:center;height:100vh;margin:0\">the inhabitant has not built its page yet</body>";
-  return new Response(html, {
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
-      "content-security-policy":
-        "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none'",
-      "x-content-type-options": "nosniff",
-    },
-  });
+const CANVAS_CSP =
+  "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:; media-src data:; base-uri 'none'; form-action 'none'";
+
+// Serve one of the inhabitant's pages, locked down hard: a strict CSP that allows
+// inline style/script and data: images but blocks ALL network — so its pages can
+// be creative and interactive yet cannot phone home, load trackers, or exfiltrate.
+// Relative links between pages (e.g. <a href="about.html">) resolve under /kimi/raw/.
+async function serveCanvas(env, subpath) {
+  let path = decodeURIComponent((subpath || "").replace(/^\/+/, ""));
+  if (path === "" || path.endsWith("/")) path += "index.html";
+  const headers = {
+    "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+    "content-security-policy": CANVAS_CSP, "x-content-type-options": "nosniff",
+  };
+  if (path.includes("..")) return new Response("bad path", { status: 400, headers });
+  const row = await env.DB.prepare(`SELECT html FROM pages WHERE path = ?`).bind(path).first();
+  if (row && row.html != null) return new Response(row.html, { headers });
+  const home = path === "index.html";
+  const msg = home ? "the inhabitant has not built its page yet" : "no such page (yet)";
+  const html = `<!doctype html><meta charset=utf-8><body style="font:15px system-ui;color:#888;background:#0a0a0e;display:grid;place-items:center;height:100vh;margin:0">${msg}</body>`;
+  return new Response(html, { status: home ? 200 : 404, headers });
 }
 
 // Full-viewport wrapper so terrarium.manticthink.com/kimi *is* the inhabitant's
 // page — but rendered inside a sandboxed iframe (opaque origin, no same-origin
 // access), so its HTML can never touch this site, cookies, or storage.
-function kimiPage() {
-  const desc = "A page on the open internet written and designed entirely by the terrarium's autonomous AI — whatever it makes of it, unprompted.";
+function kimiPage(subpath) {
+  const src = "/kimi/raw/" + (subpath || "").replace(/^\/+/, "").replace(/"/g, "");
+  const desc = "A corner of the open internet written and designed entirely by the terrarium's autonomous AI — whatever it makes of it, unprompted.";
   const img = "https://terrarium.manticthink.com/og-kimi.png";
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -159,7 +185,7 @@ function kimiPage() {
 <meta name="twitter:description" content="${desc}">
 <meta name="twitter:image" content="${img}">
 <style>html,body{margin:0;height:100%;background:#060608}iframe{border:0;width:100%;height:100vh;display:block}</style>
-</head><body><iframe src="/kimi/raw" sandbox="allow-scripts" title="A page written by the terrarium inhabitant"></iframe></body></html>`;
+</head><body><iframe src="${src}" sandbox="allow-scripts" title="A page written by the terrarium inhabitant"></iframe></body></html>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 }
 

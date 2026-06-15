@@ -34,10 +34,10 @@ CREATE TABLE IF NOT EXISTS chats (
   text TEXT
 );
 
--- "Kimi's Page": the inhabitant's self-authored public webpage. Single row.
-CREATE TABLE IF NOT EXISTS site (
-  id         INTEGER PRIMARY KEY CHECK (id = 1),
+-- "Kimi's Page": the inhabitant's self-authored public site. One row per page
+-- (index.html is home); served sandboxed at /kimi.
+CREATE TABLE IF NOT EXISTS pages (
+  path       TEXT PRIMARY KEY,
   html       TEXT,
-  cycle      INTEGER,
   updated_at TEXT
 );

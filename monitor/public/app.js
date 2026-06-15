@@ -302,12 +302,16 @@ function viewAbout(){
 async function viewCanvas(){
   await refreshLive();
   const m=await getJSON("/api/canvas");
-  const made = m && m.exists && m.bytes>0;
+  const made = m && m.exists;
+  const others = (m&&m.pages||[]).filter(p=>p!=="index.html");
+  const pagelinks = others.length
+    ? `<div class="btnrow" style="margin-bottom:14px">${others.map(p=>`<a class="btn" href="/kimi/${esc(p)}" target="_blank" rel="noopener">${esc(p)} ↗</a>`).join("")}</div>` : "";
   view.innerHTML=`
     <div class="panel">
       <h2><span class="em">🎨</span> Kimi's Page</h2>
-      <p class="sectlead">A webpage the inhabitant writes and designs entirely itself — its own voice to the outside world. ${made?`Last redesigned cycle ${m.cycle}, ${ago(m.updated_at)}.`:"It hasn't built its page yet — when it does, it appears here."} Served in a sealed sandbox (it cannot reach the network), so what you see is purely its own making.</p>
-      <div class="canvasframe"><iframe src="/kimi/raw" sandbox="allow-scripts" title="A page written by the terrarium inhabitant" loading="lazy"></iframe></div>
+      <p class="sectlead">A site the inhabitant writes and designs entirely itself — its own voice to the outside world. ${made?`${m.count} page${m.count===1?"":"s"} · last changed ${ago(m.updated_at)}.`:"It hasn't built its page yet — when it does, it appears here."} Served in a sealed sandbox (it cannot reach the network), so what you see is purely its own making.</p>
+      ${pagelinks}
+      <div class="canvasframe"><iframe src="/kimi/raw/" sandbox="allow-scripts" title="Pages written by the terrarium inhabitant" loading="lazy"></iframe></div>
       <div class="btnrow"><a class="btn" href="/kimi" target="_blank" rel="noopener">Open fullscreen ↗</a></div>
     </div>`;
 }

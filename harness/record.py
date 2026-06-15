@@ -19,8 +19,10 @@ CAP_CMD = 400
 CAP_LIST = 60
 CAP_JOURNAL = 30000
 CAP_SPACE_FILES = 200
-CAP_CANVAS = 220000  # the inhabitant's self-authored public page (≈215 KB)
-CANVAS = os.path.join(SPACE, "site", "index.html")
+CAP_CANVAS = 220000  # per self-authored page (≈215 KB)
+CAP_PAGES = 40       # max pages published
+CAP_PAGES_TOTAL = 3_000_000
+SITE_DIR = os.path.join(SPACE, "site")  # any .html here becomes a public page
 VITALITY_STATE = os.path.join(EVENTS, "vitality.json")   # harness-private state
 VITALITY_FILE = os.path.join(SPACE, "vitality.md")       # ambient gauge the inhabitant can see
 
@@ -106,13 +108,28 @@ def read_journal_tail():
     return data[-CAP_JOURNAL:]
 
 
-def read_canvas():
-    """The inhabitant's self-authored public page, if it has made one."""
-    try:
-        with open(CANVAS, encoding="utf-8", errors="replace") as f:
-            return f.read(CAP_CANVAS + 1)[:CAP_CANVAS]
-    except (FileNotFoundError, IsADirectoryError, OSError):
-        return None
+def read_site():
+    """Every .html the inhabitant has written under site/ becomes a public page.
+    Returns {relpath: html}; index.html is its home."""
+    pages, total = {}, 0
+    if not os.path.isdir(SITE_DIR):
+        return pages
+    for root, dirs, names in os.walk(SITE_DIR):
+        dirs[:] = [d for d in dirs if d not in (".git", "node_modules", "__pycache__")]
+        for n in sorted(names):
+            if not n.lower().endswith((".html", ".htm")):
+                continue
+            rel = os.path.relpath(os.path.join(root, n), SITE_DIR).replace(os.sep, "/")
+            try:
+                with open(os.path.join(root, n), encoding="utf-8", errors="replace") as f:
+                    content = f.read(CAP_CANVAS + 1)[:CAP_CANVAS]
+            except OSError:
+                continue
+            if len(pages) >= CAP_PAGES or total + len(content) > CAP_PAGES_TOTAL:
+                return pages
+            pages[rel] = content
+            total += len(content)
+    return pages
 
 
 def update_vitality(event):
@@ -252,7 +269,7 @@ def main():
         "journal_excerpt": read_journal_tail(),
         "space_files": space_files,
         "space_bytes": space_bytes,
-        "canvas_html": read_canvas(),
+        "pages": read_site(),
     }
 
     vit, vdelta, effort = update_vitality(event)
