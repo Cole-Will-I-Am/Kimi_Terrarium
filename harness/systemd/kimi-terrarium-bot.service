@@ -1,0 +1,18 @@
+[Unit]
+Description=Kimi Terrarium bot — private chat with the terrarium inhabitant
+After=network-online.target ollama.service terrarium-ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/kimi-terrarium-bot
+ExecStart=/root/kimi-bot/.venv/bin/python /root/kimi-terrarium-bot/bot.py
+Restart=on-failure
+RestartSec=5
+# Codex/runuser need a sane PATH; bot reads its own .env for the token.
+Environment=HOME=/root
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target
