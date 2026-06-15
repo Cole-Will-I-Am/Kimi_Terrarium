@@ -192,6 +192,20 @@ a:hover{color:var(--accent2)}
 .repocard h3{margin:0 0 4px;font-size:16px}
 .repocard p{margin:0;color:var(--tx2);font-size:13.5px}
 
+/* Kimi's Thoughts */
+.thinkbanner{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:11px 16px;
+  border-radius:12px;background:var(--soft);border:1px solid rgba(97,121,255,.3);
+  color:var(--tx);font-size:13.5px}
+.tdot{width:9px;height:9px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 0 0 rgba(97,121,255,.6);animation:pulse 1.8s infinite}
+.thoughtfeed{display:flex;flex-direction:column;gap:14px}
+.thought{border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;
+  background:var(--surface2)}
+.thought-head{display:flex;align-items:center;gap:11px;margin-bottom:8px}
+.thought-head .meta{font-family:var(--mono);font-size:11px;color:var(--tx3)}
+.thought-head .tlink{margin-left:auto}
+.thought .md.think{font-size:14px;line-height:1.7}
+
 /* chats w/ Cole */
 .chatbox{height:min(66vh,640px); overflow-y:auto; display:flex; flex-direction:column; gap:12px;
   padding:6px 4px 4px; scroll-behavior:smooth}

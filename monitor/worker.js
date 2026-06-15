@@ -17,6 +17,7 @@ export default {
     if (pathname === "/api/events" && request.method === "GET") return listEvents(request, env);
     if (pathname === "/api/stats" && request.method === "GET") return stats(env);
     if (pathname === "/api/journal" && request.method === "GET") return journalView(env);
+    if (pathname === "/api/thoughts" && request.method === "GET") return thoughts(request, env);
     if (pathname === "/api/chat/ingest" && request.method === "POST") return chatIngest(request, env);
     if (pathname === "/api/chat" && request.method === "GET") return chatList(request, env);
     if (pathname === "/api/canvas" && request.method === "GET") return canvasMeta(env);
@@ -258,6 +259,20 @@ async function journalView(env) {
     at: row ? row.started_at : null,
     journal: row ? row.journal_excerpt : "",
   });
+}
+
+async function thoughts(request, env) {
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "20", 10), 60);
+  const before = url.searchParams.get("before");
+  let q = `SELECT cycle, started_at, reasoning, reasoning_tokens, summary
+           FROM cycles WHERE reasoning IS NOT NULL AND reasoning != ''`;
+  const binds = [];
+  if (before) { q += ` AND cycle < ?`; binds.push(parseInt(before, 10)); }
+  q += ` ORDER BY cycle DESC LIMIT ?`;
+  binds.push(limit);
+  const { results } = await env.DB.prepare(q).bind(...binds).all();
+  return json({ thoughts: results });
 }
 
 async function stats(env) {

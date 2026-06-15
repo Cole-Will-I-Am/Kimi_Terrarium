@@ -305,6 +305,48 @@ function viewAbout(){
     </div>`;
 }
 
+let thoughtsOldest=null;
+function thinkingNow(){
+  if(!live.lastEnded) return false;
+  const rem=new Date(live.lastEnded).getTime()+WAKE_MS-Date.now();
+  const since=Date.now()-new Date(live.lastEnded).getTime();
+  return rem<=0 && since < WAKE_MS + 4*60000;  // in the wake window → likely mid-thought
+}
+function thoughtCard(t){
+  const tok=t.reasoning_tokens>0?`<span class="chip">${t.reasoning_tokens} tok</span>`:"";
+  return `<div class="thought">
+    <div class="thought-head"><span class="badge">#${t.cycle}</span>${tok}
+      <span class="meta">${ago(t.started_at)}</span>
+      <a class="meta tlink" href="#/cycle/${t.cycle}">what it then said →</a></div>
+    <div class="md think">${mdToHtml(t.reasoning)}</div>
+  </div>`;
+}
+async function viewThoughts(reset=true){
+  await refreshLive();
+  if(reset){
+    const banner = thinkingNow()
+      ? `<div class="thinkbanner"><span class="tdot"></span> Kimi is thinking right now — this waking's thoughts will appear when it finishes.</div>` : "";
+    view.innerHTML=`<div class="panel">
+      <h2><span class="em">💭</span> Kimi's Thoughts</h2>
+      <p class="sectlead">Its private reasoning, captured each waking — the stream of thought beneath what it chooses to say. Newest first.</p>
+      ${banner}
+      <div class="thoughtfeed" id="thoughtfeed"></div>
+    </div>`;
+    thoughtsOldest=null;
+  }
+  let url="/api/thoughts?limit=15"; if(!reset&&thoughtsOldest) url+="&before="+thoughtsOldest;
+  const data=await getJSON(url); const ts=(data&&data.thoughts)||[];
+  const feed=document.getElementById("thoughtfeed"); if(!feed) return;
+  const old=feed.querySelector(".more"); if(old) old.remove();
+  if(!ts.length&&reset){ feed.innerHTML=`<div class="empty">No captured thoughts yet.</div>`; return; }
+  feed.insertAdjacentHTML("beforeend", ts.map(thoughtCard).join(""));
+  if(ts.length) thoughtsOldest=ts[ts.length-1].cycle;
+  if(ts.length===15 && thoughtsOldest>1){
+    const m=document.createElement("div"); m.className="more"; m.textContent="earlier thoughts ↓";
+    m.onclick=()=>viewThoughts(false); feed.appendChild(m);
+  }
+}
+
 async function viewCanvas(){
   await refreshLive();
   const m=await getJSON("/api/canvas");
@@ -415,6 +457,7 @@ async function route(){
   if(head===""){ await viewOverview(); pollTimer=setInterval(()=>viewOverview(),15000); }
   else if(head==="canvas"){ await viewCanvas(); }
   else if(head==="chats"){ await viewChats(); pollTimer=setInterval(appendNewChats,4000); }
+  else if(head==="thoughts"){ await viewThoughts(true); pollTimer=setInterval(()=>viewThoughts(true),15000); }
   else if(head==="evolution"){ await viewEvolution(); pollTimer=setInterval(()=>viewEvolution(),20000); }
   else if(head==="log"){ await viewLog(true); pollTimer=setInterval(()=>viewLog(true),15000); }
   else if(head==="cycle"){ await viewCycle(parts[1]); }
