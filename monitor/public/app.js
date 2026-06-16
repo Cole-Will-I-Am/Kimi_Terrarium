@@ -9,7 +9,14 @@ const fmtBytes = (b) => { if (b == null) return "—"; const u=["B","KB","MB","G
 const fmtDur = (s) => { if (s==null) return "—"; if (s<60) return s+"s"; const m=Math.floor(s/60); return m+"m"+(s%60?(" "+(s%60)+"s"):""); };
 const ago = (iso) => { if(!iso) return "—"; const d=(Date.now()-new Date(iso).getTime())/1000; if(d<0) return "just now"; if(d<60) return Math.floor(d)+"s ago"; if(d<3600) return Math.floor(d/60)+"m ago"; if(d<86400) return Math.floor(d/3600)+"h ago"; return Math.floor(d/86400)+"d ago"; };
 const firstLine = (s) => { const t=(s||"").trim().split("\n").find(l=>l.trim()); return t ? stripMd(t) : "(woke, wrote nothing)"; };
-async function getJSON(u){ try{ const r=await fetch(u); if(!r.ok) return null; return await r.json(); }catch{ return null; } }
+// Cache-bust + force revalidation: the zone's Browser Cache TTL otherwise pins
+// API responses in the browser for hours, so the auto-refresh polls would just
+// re-read a stale cached copy. The unique _ param + no-store guarantee freshness.
+async function getJSON(u){ try{
+  const sep=u.includes("?")?"&":"?";
+  const r=await fetch(u+sep+"_="+Date.now(),{cache:"no-store"});
+  if(!r.ok) return null; return await r.json();
+}catch{ return null; } }
 const card=(k,v,sub)=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}${sub?` <small>${sub}</small>`:""}</div></div>`;
 
 const vitColor=(v)=> v>=66?"#3ddb8f": v>=33?"#ffce6a":"#ff6b6b";
