@@ -425,7 +425,8 @@ async function journalView(env) {
   if (rows.length) {
     const md = rows.map(r => `## ${r.head}\n\n${r.body}`).join("\n\n");
     const last = rows[rows.length - 1];
-    return json({ cycle: last.cycle, at: last.ts, entries: rows.length, full: true, journal: md });
+    return json({ cycle: last.cycle, at: last.ts, entries: rows.length, full: true,
+                  journal: md, items: rows });
   }
   // Fallback to the latest cycle excerpt until the backfill has populated the table.
   const row = await env.DB.prepare(

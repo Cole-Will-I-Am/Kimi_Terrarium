@@ -256,10 +256,36 @@ async function viewCycle(n){
 async function viewJournal(){
   await refreshLive();
   const j=await getJSON("/api/journal");
+  const items=(j&&Array.isArray(j.items))?j.items:null;
+  let bodyHtml;
+  if(items&&items.length){
+    const n=items.length;
+    // Oldest -> newest, numbered #1..#n so the very first entry is unmistakable.
+    bodyHtml=items.map((r,i)=>{
+      const title=esc((r.title||r.head||"").toString());
+      const ts=esc((r.ts||"").toString());
+      const tag=(i===0)?'<span class="jbadge first">the beginning</span>'
+               :(i===n-1)?'<span class="jbadge latest">latest</span>':"";
+      return `<article class="jentry" id="entry-${i+1}">
+        <div class="jhead"><span class="jnum">#${i+1}</span>
+          <h3>${title}</h3>${tag}<span class="ts">${ts}</span></div>
+        <div class="md">${mdToHtml(r.body||"")}</div>
+      </article>`;
+    }).join("");
+    bodyHtml=`<div class="jbar">
+        <span class="jcount">${n} entries · from the very first to now</span>
+        <span class="jjump">
+          <a href="#entry-1">↑ First entry</a>
+          <a href="#entry-${n}">↓ Latest</a>
+        </span>
+      </div>${bodyHtml}`;
+  } else {
+    bodyHtml=`<div class="md">${j&&j.journal?mdToHtml(j.journal):'<div class="empty">The journal is still empty.</div>'}</div>`;
+  }
   view.innerHTML=`<div class="panel">
     <h2><span class="em">📖</span> The Journal</h2>
-    <p class="sectlead">Its only memory that survives sleep. Past selves wrote this for future selves — the single thread of continuity it has.${j&&j.cycle?` Last written cycle ${j.cycle}, ${ago(j.at)}.`:""}</p>
-    <div class="md">${j&&j.journal?mdToHtml(j.journal):'<div class="empty">The journal is still empty.</div>'}</div>
+    <p class="sectlead">Its only memory that survives sleep. Past selves wrote this for future selves — the single thread of continuity it has. Read top‑to‑bottom: <strong>#1 is its very first waking</strong>, the newest is at the end.${j&&j.cycle?` Last written cycle ${j.cycle}, ${ago(j.at)}.`:""}</p>
+    ${bodyHtml}
   </div>`;
 }
 

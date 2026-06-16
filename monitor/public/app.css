@@ -306,3 +306,23 @@ a:hover{color:var(--accent2)}
   .hero h1{font-size:25px}
   .btn{flex:1 1 auto; justify-content:center}  /* full-width tappable buttons */
 }
+
+/* Journal: numbered entries, oldest first, with jump controls */
+.jbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;
+  position:sticky;top:0;z-index:5;padding:10px 0 12px;margin-bottom:6px;
+  background:linear-gradient(var(--bg) 70%,transparent);backdrop-filter:blur(4px)}
+.jcount{font-size:13px;color:var(--tx2)}
+.jjump{display:flex;gap:8px}
+.jjump a{font-size:12.5px;color:var(--accent);text-decoration:none;border:1px solid var(--border2);
+  border-radius:999px;padding:4px 11px;transition:background .15s,border-color .15s}
+.jjump a:hover{border-color:var(--accent);background:rgba(255,255,255,.04)}
+.jentry{scroll-margin-top:70px;padding:16px 0 18px;border-top:1px solid var(--border)}
+.jentry:first-of-type{border-top:none}
+.jhead{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 10px;margin-bottom:8px}
+.jhead h3{font-size:16px;margin:0;color:var(--accent);font-weight:620;text-transform:none;letter-spacing:0}
+.jnum{font-size:12px;font-weight:700;color:var(--tx2);font-variant-numeric:tabular-nums;
+  background:rgba(255,255,255,.05);border-radius:6px;padding:2px 7px}
+.jhead .ts{font-size:11.5px;color:var(--tx2);opacity:.8;margin-left:auto}
+.jbadge{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;border-radius:999px;padding:2px 8px;font-weight:700}
+.jbadge.first{background:rgba(120,200,140,.16);color:#9fe0b0}
+.jbadge.latest{background:rgba(140,170,255,.16);color:#aab8ff}
