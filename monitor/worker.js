@@ -8,28 +8,46 @@ const json = (obj, status = 200) =>
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 
+// Edge cache for the high-frequency read endpoints. The UI polls these every
+// 4–20s, but the underlying data only changes once per wake (~30 min), so a
+// short TTL collapses thousands of identical polls into one D1 hit per window,
+// per colo — keeping read cost flat no matter how many viewers or how old the
+// project gets. Only 200s are cached; keys include the query string.
+async function edge(ctx, request, ttlSeconds, producer) {
+  const cache = caches.default;
+  const key = new Request(new URL(request.url).toString(), { method: "GET" });
+  const hit = await cache.match(key);
+  if (hit) return hit;
+  const res = await producer();
+  if (res.status === 200) {
+    res.headers.set("cache-control", `public, max-age=${ttlSeconds}`);
+    ctx.waitUntil(cache.put(key, res.clone()));
+  }
+  return res;
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const { pathname } = url;
 
     if (pathname === "/api/ingest" && request.method === "POST") return ingest(request, env);
-    if (pathname === "/api/events" && request.method === "GET") return listEvents(request, env);
-    if (pathname === "/api/stats" && request.method === "GET") return stats(env);
-    if (pathname === "/api/journal" && request.method === "GET") return journalView(env);
-    if (pathname === "/api/thoughts" && request.method === "GET") return thoughts(request, env);
+    if (pathname === "/api/events" && request.method === "GET") return edge(ctx, request, 15, () => listEvents(request, env));
+    if (pathname === "/api/stats" && request.method === "GET") return edge(ctx, request, 20, () => stats(env));
+    if (pathname === "/api/journal" && request.method === "GET") return edge(ctx, request, 20, () => journalView(env));
+    if (pathname === "/api/thoughts" && request.method === "GET") return edge(ctx, request, 15, () => thoughts(request, env));
     if (pathname === "/api/chat/ingest" && request.method === "POST") return chatIngest(request, env);
-    if (pathname === "/api/chat" && request.method === "GET") return chatList(request, env);
+    if (pathname === "/api/chat" && request.method === "GET") return chatList(request, env);  // live feed — uncached
     if (pathname === "/api/milestones/ingest" && request.method === "POST") return milestoneIngest(request, env);
-    if (pathname === "/api/milestones" && request.method === "GET") return milestoneList(request, env);
-    if (pathname === "/api/canvas" && request.method === "GET") return canvasMeta(env);
+    if (pathname === "/api/milestones" && request.method === "GET") return edge(ctx, request, 60, () => milestoneList(request, env));
+    if (pathname === "/api/canvas" && request.method === "GET") return edge(ctx, request, 30, () => canvasMeta(env));
     if ((pathname === "/kimi/raw" || pathname.startsWith("/kimi/raw/")) && request.method === "GET")
       return serveCanvas(env, pathname.slice(9));            // raw page (in the sandbox)
     if ((pathname === "/kimi" || pathname.startsWith("/kimi/")) && request.method === "GET")
       return kimiPage(pathname === "/kimi" ? "" : pathname.slice(6));  // wrapper
-    if (pathname === "/feed.xml" && request.method === "GET") return rss(request, env);
+    if (pathname === "/feed.xml" && request.method === "GET") return edge(ctx, request, 300, () => rss(request, env));
     if (pathname.startsWith("/api/events/") && request.method === "GET")
-      return oneEvent(env, pathname.split("/").pop());
+      return edge(ctx, request, 300, () => oneEvent(env, pathname.split("/").pop()));  // a recorded cycle is ~immutable
 
     // everything else -> static assets (index.html, etc.)
     return env.ASSETS.fetch(request);
@@ -87,7 +105,20 @@ async function ingest(request, env) {
     await env.DB.batch(stmts);
   }
 
+  // Recompute the site-wide aggregate ONCE here (every ~30 min), so the
+  // public /api/stats endpoint — polled every 15s by every viewer — never has
+  // to scan the full, ever-growing cycles table. See computeStats/stats below.
+  await refreshStatsCache(env);
+
   return json({ ok: true, cycle: e.cycle });
+}
+
+async function refreshStatsCache(env) {
+  const obj = await computeStats(env);
+  await env.DB.prepare(
+    `INSERT INTO stats_cache (id, json, updated_at) VALUES (1, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`
+  ).bind(JSON.stringify(obj), new Date().toISOString()).run();
 }
 
 async function chatIngest(request, env) {
@@ -303,7 +334,22 @@ async function thoughts(request, env) {
   return json({ thoughts: results });
 }
 
+// Public stats: serve the precomputed aggregate (one row, O(1)) refreshed on
+// each ingest. Falls back to a live compute if the cache row isn't there yet
+// (e.g. right after deploy, before the next wake) so it's always correct.
 async function stats(env) {
+  const row = await env.DB.prepare(`SELECT json FROM stats_cache WHERE id = 1`).first();
+  if (row && row.json) {
+    return new Response(row.json, {
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+  return json(await computeStats(env));
+}
+
+// The expensive full-table aggregation. Runs once per ingest, never on the
+// hot read path.
+async function computeStats(env) {
   const agg = await env.DB.prepare(
     `SELECT COUNT(*)              AS total_cycles,
             MIN(started_at)       AS first_at,
@@ -339,7 +385,7 @@ async function stats(env) {
   ).all();
   const vitality_series = (series.results || []).map(r => r.vitality).reverse();
 
-  return json({
+  return {
     ...agg,
     status_breakdown: byStatus.results,
     latest_cycle: latest ? latest.cycle : null,
@@ -350,5 +396,5 @@ async function stats(env) {
     vitality: latest ? latest.vitality : null,
     vitality_delta: latest ? latest.vitality_delta : null,
     vitality_series,
-  });
+  };
 }

@@ -1,12 +1,12 @@
 [Unit]
-Description=Wake the terrarium inhabitant roughly every 10 minutes
+Description=Wake the terrarium inhabitant roughly every 30 minutes
 
 [Timer]
 # Kick off shortly after boot or after (re)enabling the timer...
 OnBootSec=2min
 OnActiveSec=1min
-# ...then wake again 10 minutes after each cycle finishes (oneshot goes inactive).
-OnUnitInactiveSec=10min
+# ...then wake again 30 minutes after each cycle finishes (oneshot goes inactive).
+OnUnitInactiveSec=30min
 AccuracySec=15s
 Persistent=false
 

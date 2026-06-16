@@ -22,6 +22,10 @@ CAP_SPACE_FILES = 200
 CAP_CANVAS = 220000  # per self-authored page (≈215 KB)
 CAP_PAGES = 40       # max pages published
 CAP_PAGES_TOTAL = 3_000_000
+# Local retention: keep the ledger + archive bounded. At ~48 cycles/day this is
+# ~3.5 months of full local history; everything is already shipped to the
+# monitor (which keeps the full record), so old local copies are just a buffer.
+KEEP_CYCLES = 5000
 SITE_DIR = os.path.join(SPACE, "site")  # any .html here becomes a public page
 VITALITY_STATE = os.path.join(EVENTS, "vitality.json")   # harness-private state
 VITALITY_FILE = os.path.join(SPACE, "vitality.md")       # ambient gauge the inhabitant can see
@@ -198,6 +202,36 @@ def init_ledger():
     return db
 
 
+def prune_old(db, current_cycle):
+    """Keep local storage bounded: drop already-shipped ledger rows and archive
+    files older than the last KEEP_CYCLES cycles. Unshipped rows are never
+    pruned, so an offline stretch can't lose un-delivered cycles."""
+    cutoff = current_cycle - KEEP_CYCLES
+    if cutoff <= 0:
+        return
+    try:
+        db.execute("DELETE FROM cycles WHERE cycle <= ? AND shipped = 1", (cutoff,))
+        db.commit()
+    except sqlite3.Error:
+        pass
+    adir = os.path.join(EVENTS, "archive")
+    try:
+        for n in os.listdir(adir):
+            if not n.endswith(".json"):
+                continue
+            try:
+                c = int(n[:-5])
+            except ValueError:
+                continue
+            if c <= cutoff:
+                try:
+                    os.remove(os.path.join(adir, n))
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+
 def ship_pending(db, ingest_url, token):
     if not ingest_url or not token:
         return
@@ -290,6 +324,7 @@ def main():
           f"files={len(files)} chars={event['chars_out']} tokens={usage.get('output_tokens')}")
 
     ship_pending(db, os.environ.get("INGEST_URL"), os.environ.get("INGEST_TOKEN"))
+    prune_old(db, a.cycle)
     db.close()
 
 

@@ -26,6 +26,14 @@ CREATE TABLE IF NOT EXISTS cycles (
 );
 CREATE INDEX IF NOT EXISTS idx_cycles_started ON cycles(started_at);
 
+-- Precomputed site-wide aggregate (single row, id=1), refreshed on each ingest
+-- so /api/stats never scans the full cycles table on the hot read path.
+CREATE TABLE IF NOT EXISTS stats_cache (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  json       TEXT,
+  updated_at TEXT
+);
+
 -- "Chronicle": breakthroughs/milestones in Kimi's evolution, written hourly by the chronicler model.
 CREATE TABLE IF NOT EXISTS milestones (
   id      INTEGER PRIMARY KEY AUTOINCREMENT,
