@@ -34,6 +34,7 @@ export default {
     if (pathname === "/api/ingest" && request.method === "POST") return ingest(request, env);
     if (pathname === "/api/events" && request.method === "GET") return edge(ctx, request, 15, () => listEvents(request, env));
     if (pathname === "/api/stats" && request.method === "GET") return edge(ctx, request, 20, () => stats(env));
+    if (pathname === "/api/journal/ingest" && request.method === "POST") return journalIngest(request, env);
     if (pathname === "/api/journal" && request.method === "GET") return edge(ctx, request, 20, () => journalView(env));
     if (pathname === "/api/thoughts" && request.method === "GET") return edge(ctx, request, 15, () => thoughts(request, env));
     if (pathname === "/api/chat/ingest" && request.method === "POST") return chatIngest(request, env);
@@ -395,7 +396,38 @@ function hydrate(r) {
   };
 }
 
+async function journalIngest(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!env.INGEST_TOKEN || token !== env.INGEST_TOKEN) return json({ error: "unauthorized" }, 401);
+  let m;
+  try { m = await request.json(); } catch { return json({ error: "bad json" }, 400); }
+  const head = (m.head ?? "").toString().trim();
+  if (!head) return json({ error: "empty" }, 400);
+  // Dedup on `head` — once an entry is recorded it is never replaced or removed,
+  // so a later prune (or edit) of journal.md can't erase it from the site.
+  const dup = await env.DB.prepare(
+    `SELECT id FROM journal_entries WHERE head = ? LIMIT 1`
+  ).bind(head).first();
+  if (dup) return json({ ok: true, id: dup.id, dedup: true });
+  const r = await env.DB.prepare(
+    `INSERT INTO journal_entries (ts, head, title, body, cycle) VALUES (?,?,?,?,?)`
+  ).bind(m.ts || "", head, (m.title ?? "").toString(), (m.body ?? "").toString().slice(0, 60000),
+         Number.isFinite(m.cycle) ? m.cycle : null).run();
+  return json({ ok: true, id: r.meta?.last_row_id ?? null });
+}
+
 async function journalView(env) {
+  // Full, append-only history (oldest -> newest = 0 -> 1). Prune-proof.
+  const rows = (await env.DB.prepare(
+    `SELECT ts, head, body, cycle FROM journal_entries ORDER BY ts ASC, id ASC`
+  ).all()).results || [];
+  if (rows.length) {
+    const md = rows.map(r => `## ${r.head}\n\n${r.body}`).join("\n\n");
+    const last = rows[rows.length - 1];
+    return json({ cycle: last.cycle, at: last.ts, entries: rows.length, full: true, journal: md });
+  }
+  // Fallback to the latest cycle excerpt until the backfill has populated the table.
   const row = await env.DB.prepare(
     `SELECT cycle, started_at, journal_excerpt FROM cycles
      WHERE journal_excerpt IS NOT NULL AND journal_excerpt != ''
@@ -404,6 +436,7 @@ async function journalView(env) {
   return json({
     cycle: row ? row.cycle : null,
     at: row ? row.started_at : null,
+    full: false,
     journal: row ? row.journal_excerpt : "",
   });
 }

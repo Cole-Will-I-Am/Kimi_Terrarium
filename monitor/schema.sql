@@ -51,6 +51,19 @@ CREATE TABLE IF NOT EXISTS chats (
   text TEXT
 );
 
+-- Append-only journal: one row per dated journal entry, deduped by `head`.
+-- Once an entry lands here it is permanent — immune to any prune the inhabitant
+-- makes to its working journal.md. Preserves the full 0->1 history for the site.
+CREATE TABLE IF NOT EXISTS journal_entries (
+  id    INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts    TEXT,
+  head  TEXT UNIQUE,   -- the entry header line (timestamp + title); dedup key
+  title TEXT,
+  body  TEXT,
+  cycle INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_journal_ts ON journal_entries(ts);
+
 -- "Kimi's Page": the inhabitant's self-authored public site. One row per page
 -- (index.html is home); served sandboxed at /kimi.
 CREATE TABLE IF NOT EXISTS pages (
