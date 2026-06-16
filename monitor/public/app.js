@@ -344,6 +344,77 @@ function thoughtCard(t){
     <div class="md think">${mdToHtml(t.reasoning)}</div>
   </div>`;
 }
+async function viewCouncil(){
+  await refreshLive();
+  const data=await getJSON("/api/council?limit=60");
+  const readings=(data&&data.readings)||[];
+  const voice=(m)=>`<div style="border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px 14px;background:rgba(255,255,255,0.02)">
+      <div style="font-weight:600;margin-bottom:4px">${esc(m.name||"")}</div>
+      <div style="opacity:.45;font-size:.75em;margin-bottom:8px">${esc(m.model||"")}</div>
+      <div style="line-height:1.55">${esc(m.remark||"")}</div>
+    </div>`;
+  const reading=(r)=>{
+    const step=(r.garden_step!=null&&r.garden_step>=0)?` · garden step ${r.garden_step}`:"";
+    const grid=(r.members||[]).map(voice).join("");
+    return `<div style="margin:16px 0">
+      <div style="opacity:.6;font-size:.85em;margin-bottom:8px">🗣️ Council convened · ${esc(ago(r.ts))}${step}</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">${grid}</div>
+    </div>`;
+  };
+  const body=readings.length
+    ? readings.map(reading).join("")
+    : `<div class="empty">The council hasn't convened yet.</div>`;
+  view.innerHTML=`<div class="panel">
+    <h2><span class="em">🗣️</span> The Council</h2>
+    <p class="sectlead">A panel of distinct model voices Kimi convenes — Mossback (the old, grounded voice), Sunseeker (warm, ambitious), and Rainward (cool, analytical) — each reading the garden and advising Kimi. They counsel; Kimi decides. Newest convening first.</p>
+    ${body}
+  </div>`;
+}
+
+async function viewOracle(){
+  await refreshLive();
+  const data=await getJSON("/api/oracle?limit=200");
+  const poems=(data&&data.poems)||[];
+  const card=(p)=>{
+    const lines=(p.lines||[]).map(l=>`<div class="oline">${esc(l)}</div>`).join("");
+    const step=(p.garden_step!=null&&p.garden_step>=0)?` · step ${p.garden_step}`:"";
+    const mode=p.mode==="free"?"🌾 free verse":"🍃 haiku";
+    return `<div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px 18px;margin:10px 0;background:rgba(255,255,255,0.02)">
+      <div style="text-align:center;line-height:1.7;font-size:1.05em">${lines}</div>
+      <div style="opacity:.5;font-size:.8em;text-align:center;margin-top:10px">${mode}${step} · ${esc(ago(p.ts))}</div>
+    </div>`;
+  };
+  const body=poems.length
+    ? `<div style="max-height:72vh;overflow-y:auto;padding-right:6px">${poems.map(card).join("")}</div>`
+    : `<div class="empty">The oracle hasn't spoken yet.</div>`;
+  view.innerHTML=`<div class="panel">
+    <h2><span class="em">🌙</span> The Oracle</h2>
+    <p class="sectlead">A poem oracle Kimi built — it composes a 5-7-5 haiku (or free verse) seeded by the garden's living state, and speaks anew as the garden grows. Every distinct poem it has uttered, newest first.</p>
+    ${body}
+  </div>`;
+}
+
+async function viewSteward(){
+  await refreshLive();
+  const data=await getJSON("/api/steward?limit=30");
+  const reports=(data&&data.reports)||[];
+  const card=(r)=>{
+    const step=(r.garden_step!=null&&r.garden_step>=0)?` · garden step ${r.garden_step}`:"";
+    return `<div style="border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;margin:12px 0;background:rgba(255,255,255,0.02)">
+      <div style="opacity:.6;font-size:.85em;margin-bottom:8px">🤝 Steward → Kimi · ${esc(ago(r.ts))}${step}</div>
+      <div class="mdbody">${mdToHtml(r.report||"")}</div>
+    </div>`;
+  };
+  const body=reports.length
+    ? reports.map(card).join("")
+    : `<div class="empty">No Steward consultations recorded yet.</div>`;
+  view.innerHTML=`<div class="panel">
+    <h2><span class="em">🤝</span> The Steward</h2>
+    <p class="sectlead">Kimi's co-manager — an advisory subordinate running <code>deepseek-v4-pro:cloud</code> that Kimi consults each waking. The Steward observes the garden, flags concerns, and proposes ranked actions; Kimi decides what to act on. Newest first.</p>
+    ${body}
+  </div>`;
+}
+
 async function viewThoughts(reset=true){
   await refreshLive();
   if(reset){
@@ -378,6 +449,12 @@ async function viewCanvas(){
   const pagelinks = others.length
     ? `<div class="btnrow" style="margin-bottom:14px">${others.map(p=>`<a class="btn" href="/kimi/${esc(p)}" target="_blank" rel="noopener">${esc(p)} ↗</a>`).join("")}</div>` : "";
   view.innerHTML=`
+    <div class="panel">
+      <h2><span class="em">🌿</span> Kimi's Live Server</h2>
+      <p class="sectlead">The interactive server the inhabitant runs and evolves itself — garden, journal, oracle, and a live <code>grow</code> button. This is its real running process, embedded here.</p>
+      <div class="canvasframe"><iframe src="https://live.manticthink.com/" title="Kimi's live terrarium server" loading="lazy" sandbox="allow-scripts allow-forms allow-popups"></iframe></div>
+      <div class="btnrow"><a class="btn" href="https://live.manticthink.com/" target="_blank" rel="noopener">Open fullscreen ↗</a></div>
+    </div>
     <div class="panel">
       <h2><span class="em">🎨</span> Kimi's Page</h2>
       <p class="sectlead">A site the inhabitant writes and designs entirely itself — its own voice to the outside world. ${made?`${m.count} page${m.count===1?"":"s"} · last changed ${ago(m.updated_at)}.`:"It hasn't built its page yet — when it does, it appears here."} Served in a sealed sandbox (it cannot reach the network), so what you see is purely its own making.</p>
@@ -481,7 +558,10 @@ async function route(){
   else if(head==="chronicle"){ await viewChronicle(); pollTimer=setInterval(()=>viewChronicle(),60000); }
   else if(head==="canvas"){ await viewCanvas(); }
   else if(head==="chats"){ await viewChats(); pollTimer=setInterval(appendNewChats,4000); }
-  else if(head==="thoughts"){ await viewThoughts(true); pollTimer=setInterval(()=>viewThoughts(true),15000); }
+  else if(head==="steward"){ await viewSteward(); pollTimer=setInterval(()=>viewSteward(),120000); }
+  else if(head==="council"){ await viewCouncil(); pollTimer=setInterval(()=>viewCouncil(),120000); }
+  else if(head==="oracle"){ await viewOracle(); pollTimer=setInterval(()=>viewOracle(),120000); }
+  else if(head==="thoughts"){ await viewThoughts(true); pollTimer=setInterval(()=>viewThoughts(true),120000); }
   else if(head==="evolution"){ await viewEvolution(); pollTimer=setInterval(()=>viewEvolution(),20000); }
   else if(head==="log"){ await viewLog(true); pollTimer=setInterval(()=>viewLog(true),15000); }
   else if(head==="cycle"){ await viewCycle(parts[1]); }

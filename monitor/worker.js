@@ -40,6 +40,12 @@ export default {
     if (pathname === "/api/chat" && request.method === "GET") return chatList(request, env);  // live feed — uncached
     if (pathname === "/api/milestones/ingest" && request.method === "POST") return milestoneIngest(request, env);
     if (pathname === "/api/milestones" && request.method === "GET") return edge(ctx, request, 60, () => milestoneList(request, env));
+    if (pathname === "/api/steward/ingest" && request.method === "POST") return stewardIngest(request, env);
+    if (pathname === "/api/steward" && request.method === "GET") return edge(ctx, request, 60, () => stewardList(request, env));
+    if (pathname === "/api/oracle/ingest" && request.method === "POST") return oracleIngest(request, env);
+    if (pathname === "/api/oracle" && request.method === "GET") return edge(ctx, request, 60, () => oracleList(request, env));
+    if (pathname === "/api/council/ingest" && request.method === "POST") return councilIngest(request, env);
+    if (pathname === "/api/council" && request.method === "GET") return edge(ctx, request, 60, () => councilList(request, env));
     if (pathname === "/api/canvas" && request.method === "GET") return edge(ctx, request, 30, () => canvasMeta(env));
     if ((pathname === "/kimi/raw" || pathname.startsWith("/kimi/raw/")) && request.method === "GET")
       return serveCanvas(env, pathname.slice(9));            // raw page (in the sandbox)
@@ -162,6 +168,88 @@ async function milestoneList(request, env) {
   return json({ milestones: results });
 }
 
+async function stewardIngest(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!env.INGEST_TOKEN || token !== env.INGEST_TOKEN) return json({ error: "unauthorized" }, 401);
+  let m;
+  try { m = await request.json(); } catch { return json({ error: "bad json" }, 400); }
+  const report = (m.report ?? "").toString().slice(0, 20000);
+  if (!report) return json({ error: "empty" }, 400);
+  // Dedup on (ts, cycle) so re-shipping the same log line is idempotent.
+  const ts = m.ts || new Date().toISOString();
+  const cycle = Number.isFinite(m.cycle) ? m.cycle : null;
+  const dup = await env.DB.prepare(
+    `SELECT id FROM steward WHERE ts = ? AND IFNULL(cycle,-1) = IFNULL(?,-1) LIMIT 1`
+  ).bind(ts, cycle).first();
+  if (dup) return json({ ok: true, id: dup.id, dedup: true });
+  const r = await env.DB.prepare(
+    `INSERT INTO steward (ts, cycle, garden_step, report) VALUES (?,?,?,?)`
+  ).bind(ts, cycle, Number.isFinite(m.garden_step) ? m.garden_step : null, report).run();
+  return json({ ok: true, id: r.meta?.last_row_id ?? null });
+}
+async function stewardList(request, env) {
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "30", 10), 100);
+  const rows = (await env.DB.prepare(
+    `SELECT id, ts, cycle, garden_step, report FROM steward ORDER BY id DESC LIMIT ?`
+  ).bind(limit).all()).results;
+  return json({ reports: rows });
+}
+async function councilIngest(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!env.INGEST_TOKEN || token !== env.INGEST_TOKEN) return json({ error: "unauthorized" }, 401);
+  let m;
+  try { m = await request.json(); } catch { return json({ error: "bad json" }, 400); }
+  const members = Array.isArray(m.members) ? m.members.slice(0, 8).map(x => ({
+    name: (x.name || "").toString().slice(0, 40),
+    model: (x.model || "").toString().slice(0, 60),
+    remark: (x.remark || "").toString().slice(0, 4000),
+  })) : [];
+  if (!members.length) return json({ error: "empty" }, 400);
+  const ts = m.ts || new Date().toISOString();
+  const dup = await env.DB.prepare(`SELECT id FROM council WHERE ts = ? LIMIT 1`).bind(ts).first();
+  if (dup) return json({ ok: true, id: dup.id, dedup: true });
+  const r = await env.DB.prepare(
+    `INSERT INTO council (ts, garden_step, members) VALUES (?,?,?)`
+  ).bind(ts, Number.isFinite(m.garden_step) ? m.garden_step : null, JSON.stringify(members)).run();
+  return json({ ok: true, id: r.meta?.last_row_id ?? null });
+}
+async function councilList(request, env) {
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "60", 10), 200);
+  const rows = (await env.DB.prepare(
+    `SELECT id, ts, garden_step, members FROM council ORDER BY id DESC LIMIT ?`
+  ).bind(limit).all()).results.map(r => ({ ...r, members: JSON.parse(r.members || "[]") }));
+  return json({ readings: rows });
+}
+async function oracleIngest(request, env) {
+  const auth = request.headers.get("authorization") || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!env.INGEST_TOKEN || token !== env.INGEST_TOKEN) return json({ error: "unauthorized" }, 401);
+  let m;
+  try { m = await request.json(); } catch { return json({ error: "bad json" }, 400); }
+  const lines = Array.isArray(m.lines) ? m.lines.map(x => x.toString().slice(0, 300)).slice(0, 12) : [];
+  if (!lines.length) return json({ error: "empty" }, 400);
+  const ts = m.ts || new Date().toISOString();
+  const dup = await env.DB.prepare(`SELECT id FROM oracle WHERE ts = ? LIMIT 1`).bind(ts).first();
+  if (dup) return json({ ok: true, id: dup.id, dedup: true });
+  const r = await env.DB.prepare(
+    `INSERT INTO oracle (ts, mode, garden_step, lines) VALUES (?,?,?,?)`
+  ).bind(ts, (m.mode || "haiku").toString().slice(0, 16),
+         Number.isFinite(m.garden_step) ? m.garden_step : null,
+         JSON.stringify(lines)).run();
+  return json({ ok: true, id: r.meta?.last_row_id ?? null });
+}
+async function oracleList(request, env) {
+  const url = new URL(request.url);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10), 500);
+  const rows = (await env.DB.prepare(
+    `SELECT id, ts, mode, garden_step, lines FROM oracle ORDER BY id DESC LIMIT ?`
+  ).bind(limit).all()).results.map(r => ({ ...r, lines: JSON.parse(r.lines || "[]") }));
+  return json({ poems: rows });
+}
 async function chatList(request, env) {
   const url = new URL(request.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") || "60", 10), 200);
