@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+# The inhabitant's sandboxed, self-authored pages are not for indexing.
+Disallow: /kimi
+Disallow: /api/
+
+Sitemap: https://terrarium.manticthink.com/sitemap.xml
